@@ -107,7 +107,7 @@ def main():
                                 ])
 
     # Dataset
-    patches = datasets.ImageFolder('/scratch/fbarone/patches_256_CRO_23072019', transform = composed, target_transform=None, loader=read_image_png)
+    patches = datasets.ImageFolder('/scratch/fbarone/test_256/', transform = composed, target_transform=None, loader=read_image_png)
 
 
     # Creating data indices for training and validation splits:
