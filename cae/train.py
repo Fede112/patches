@@ -158,8 +158,9 @@ def main():
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     # optimizer = torch.optim.RMSprop(model.parameters())
 
-
+    print("----------------------------------------------------------------")
     print("Start training...")
+    print("================================================================")
     loss_hist = []
     for it, epoch in enumerate(range(num_epochs)):
         # train for one epoch, printing every 10 iterations
@@ -178,7 +179,7 @@ def main():
         # checkpoint
         # if (it + 1) % (num_epochs // checkpoint_freq) == 0:
 
-    print("End training")
+    print("================================================================")
 
     # Plot results
     # obtain one batch of test images
@@ -212,6 +213,7 @@ def main():
     # Training history
     fig_hist = plt.figure()
     ax = fig_hist.add_subplot(1,1,1)
+    # unzip list of tuples
     train_loss, valid_loss = zip(*loss_hist)
     ax.plot(range(len(loss_hist)), train_loss, label = 'training loss')
     ax.plot(range(len(loss_hist)), valid_loss, label = 'validation loss')
