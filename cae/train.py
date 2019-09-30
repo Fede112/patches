@@ -3,11 +3,13 @@ import sys
 import time
 import numpy as np
 import matplotlib.pyplot as plt
+from tqdm import tqdm
 
 import torch
 import torch.optim as optim
 from torch import nn
-from torch.utils.data import DataLoader 
+from torch.utils.data import DataLoader
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 from torchvision import datasets
 from torchvision import transforms
@@ -20,6 +22,7 @@ from torch.utils.data.sampler import SubsetRandomSampler
 from utils import ExpoAverageMeter
 from utils import read_image_png
 from models import Basic_CAE
+from models import Average_CAE
 
 sys.path.insert(0,'/u/f/fbarone/Documents/patches/')
 
@@ -37,7 +40,7 @@ def train_one_epoch(model, optimizer, criterion, train_loader, device, epoch, pr
 
 
     # batch forward pass
-    for i_batch, data in enumerate(train_loader):
+    for i_batch, data in tqdm(enumerate(train_loader)):
         # _ should be the target, which for cae its the image itself        
         images, _ = data[0].to(device), data[1]
         # clear the gradients of all optimized variables
@@ -65,6 +68,54 @@ def train_one_epoch(model, optimizer, criterion, train_loader, device, epoch, pr
     # loss of last mini_batch
     return losses
 
+
+def train_one_epoch_DCAE(model, optimizer, criterion, train_loader, device, epoch, print_freq = 2):
+    # Ensure dropout layers are in train mode
+    model.train()
+
+    losses = ExpoAverageMeter(alpha = 0.5)  # loss (per word decoded)
+    # batch_time = ExpoAverageMeter()  # forward prop. + back prop. time
+
+    # start = time.time()
+
+
+    # batch forward pass
+    for i_batch, data in tqdm(enumerate(train_loader)):
+        # _ should be the target, which for cae its the image itself        
+        images, _ = data[0].to(device), data[1]
+        # clear the gradients of all optimized variables
+        optimizer.zero_grad()
+        # forward pass: compute predicted outputs by passing inputs to the model
+        outputs = model(images)
+
+        # images are repeated to be compatible with DenseNet, but output is just 1 channel
+        # TODO: not the cleanest solution
+        images_reduce = images[:,0,:,:][:,None,:,:]
+        images_reduce = images_reduce*0.229 + 0.485
+        # print(torch.max(images_reduce))
+        # print(torch.min(images_reduce))
+        # calculate the loss
+        loss = criterion(outputs, images_reduce)
+        # backward pass: compute gradient of the loss with respect to model parameters
+        loss.backward()
+        # perform a single optimization step (parameter update)
+        optimizer.step()
+
+        # keep track of metrics
+        losses.update(loss.item()) # update running training loss
+        # batch_time.update(time.time() - start) # update time per batch
+
+            
+        # Print status
+        if (i_batch + 1) % (len(train_loader) // print_freq) == 0:
+            print(f'Epoch: [{epoch}] [{i_batch + 1}/ {len(train_loader)}] \t  \
+                    Train Loss: {losses.val:.4f} ({losses.avg:.4f})')
+
+
+    # loss of last mini_batch
+    return losses
+
+
 def valid(model, criterion, val_loader, device, epoch):
     # Ensure dropout layers are in validation mode (no dropout or batchnorm)
     model.eval()
@@ -85,6 +136,33 @@ def valid(model, criterion, val_loader, device, epoch):
 
 
     return losses
+
+def valid_DCAE(model, criterion, val_loader, device, epoch):
+    # Ensure dropout layers are in validation mode (no dropout or batchnorm)
+    model.eval()
+
+    losses = ExpoAverageMeter(alpha = 0.5)
+
+    with torch.no_grad():
+        for data in val_loader:
+            images, _ = data[0].to(device), data[1]
+            outputs = model(images)
+            # TODO: not the cleanest solution to keep 2d array without loosing the dimension
+            images_reduce = images[:,0,:,:][:,None,:,:]
+            images_reduce = images_reduce*0.229 + 0.485
+
+
+            loss = criterion(outputs, images_reduce)
+
+            # keep track of metrics
+            losses.update(loss.item()) # update running training loss
+
+        # Print status
+        print(f'Epoch: [{epoch}] \t\t Valid Loss: {losses.val:.4f} ({losses.avg:.4f})')
+
+
+    return losses
+
 
 
 
@@ -138,7 +216,8 @@ def main():
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
     # initialize the NN model
-    model = Basic_CAE().to(device)
+    # model = Basic_CAE().to(device)
+    model = Average_CAE().to(device)
 
     # print summary]
     # summary(your_model, input_size=(channels, H, W))
@@ -146,35 +225,48 @@ def main():
 
 
     # Training parameters
-    num_epochs = 3
+    num_epochs = 300
     lr = 0.0005
     # number of checpoints
     checkpoint_freq = 1
 
     # loss function
     criterion = nn.MSELoss()
+    # criterion = nn.BCELoss()
 
     # optimizer algorithm
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     # optimizer = torch.optim.RMSprop(model.parameters())
 
     print("----------------------------------------------------------------")
+    print('\n')
+    print("----------------------------------------------------------------")
     print("Start training...")
+    print(f'num_epochs: {num_epochs} \
+            initial lr: {lr} \
+            batch_size: {batch_size}')
     print("================================================================")
+
+
+    # factor = decaying factor
+    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=10, verbose=True)
+
     loss_hist = []
     for it, epoch in enumerate(range(num_epochs)):
         # train for one epoch, printing every 10 iterations
         train_loss = train_one_epoch(model, optimizer, criterion, train_loader, \
                         device, epoch, print_freq = 2)
 
-        # update the learning rate
-        # lr_scheduler.step()
 
         # evaluate on the test dataset
         valid_loss = valid(model, criterion, valid_loader, device, epoch)
         
         # keep track of train and valid loss history
         loss_hist.append((train_loss.val, valid_loss.val))
+
+        # update the learning rate
+        scheduler.step(train_loss.val)
+        print("-----------------")
 
         # checkpoint
         # if (it + 1) % (num_epochs // checkpoint_freq) == 0:

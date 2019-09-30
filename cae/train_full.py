@@ -4,9 +4,11 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 import torch
-import torch.optim as optim
 from torch import nn
 from torch.utils.data import DataLoader 
+import torch.optim as optim
+# Where to add a new import
+from torch.optim.lr_scheduler import ReduceLROnPlateau
 
 from torchvision import datasets
 from torchvision import transforms
@@ -20,6 +22,8 @@ from utils import ExpoAverageMeter
 from utils import read_image_png
 from models import Basic_CAE
 from models import DenseNet_CAE
+from train import train_one_epoch_DCAE
+from train import valid_DCAE
 
 sys.path.insert(0,'/u/f/fbarone/Documents/patches/')
 
@@ -47,7 +51,7 @@ from mm_patch.utils import image_from_index
 
 ## Start Training
 # Dataloader parameters
-batch_size = 128
+batch_size = 64
 validation_split = .2
 shuffle_dataset = True
 random_seed= 42
@@ -57,13 +61,19 @@ random_seed= 42
 composed = transforms.Compose([ 
 #                                 mm_patch.transforms.ToImage(),
                                 transforms.ToTensor(),
-                                mm_patch.transforms.Scale()
-#                                 mm_patch.transforms.GrayToRGB(),
-#                                 transforms.Normalize(mean=[18820.3496], std=[8547.6963])
+                                mm_patch.transforms.Scale(),
+                                mm_patch.transforms.GrayToRGB(),
+                                # Norm does (image - mean) / std
+                                # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+                                transforms.Normalize(mean=[0.485, 0.485, 0.485], std=[0.229, 0.229, 0.229])
+                                # true (mean,std) of patches : (0.3373, 0.1767)
                             ])
 
+
+
 # Dataset
-patches = datasets.ImageFolder('/scratch/fbarone/patches_256_CRO_23072019', transform = composed, target_transform=None, loader=read_image_png)
+# patches = datasets.ImageFolder('/scratch/fbarone/patches_256_CRO_23072019', transform = composed, target_transform=None, loader=read_image_png)
+patches = datasets.ImageFolder('/scratch/fbarone/test_256', transform = composed, target_transform=None, loader=read_image_png)
 
 
 # Creating data indices for training and validation splits:
@@ -100,57 +110,73 @@ gen_param = {'nc': 1, 'nz': 1024, 'ngf': 256, 'ngpu': 1}
 model = DenseNet_CAE(dense_param, gen_param).to(device)
 
 ## Load subset of pretrained model
-model_path = '/home/fede/Documents/mhpc/mhpc-thesis/code/breast_cancer_classifier/models/sample_patch_model.p'
+model_path = '/u/f/fbarone/Documents/breast_cancer_classifier/models/sample_patch_model.p'
 # densenet121 dict (subnet inside DenseNet_CAE)
 # densenet121_dict = model.densenet121.densenet.state_dict()
 
 # pretrained model_dict
-pretrained_model_dict = torch.load(model_path)# ["model"]
+# pretrained_model_dict = torch.load(model_path)# ["model"]
 
 # load pretrained parameters into densenet121
-model.densenet121.densenet.load_state_dict(pretrained_model_dict)
+# model.densenet121.densenet.load_state_dict(pretrained_model_dict)
 
+model.densenet121.load_from_path(model_path)
+
+# freeze densenet121 layer
+for param in model.densenet121.parameters():
+    param.requires_grad = False
 
 # print summary]
 # summary(your_model, input_size=(channels, H, W))
-summary(model, input_size=(1, 256, 256), device = 'cuda')
+summary(model, input_size=(3, 256, 256), device = 'cuda')
 
 
 # Training parameters
-num_epochs = 3
-lr = 0.0005
+num_epochs = 100
+lr = 0.002
+
 # number of checpoints
 checkpoint_freq = 1
 
 # loss function
 criterion = nn.MSELoss()
+# criterion = nn.CrossEntropyLoss()
 
 # optimizer algorithm
 optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 # optimizer = torch.optim.RMSprop(model.parameters())
 
 print("----------------------------------------------------------------")
+
+print('\n')
+print("----------------------------------------------------------------")
 print("Start training...")
+print(f'num_epochs: {num_epochs}, \
+        initial lr: {lr} \
+        batch_size: {batch_size}')
 print("================================================================")
 
-# freeze densenet121 layer
-for param in model.densenet121.parameters():
-    param.requires_grad = False
+
+# factor = decaying factor
+scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=4, verbose=True)
 
 loss_hist = []
 for it, epoch in enumerate(range(num_epochs)):
     # train for one epoch, printing every 10 iterations
-    train_loss = train_one_epoch(model, optimizer, criterion, train_loader, \
+    train_loss = train_one_epoch_DCAE(model, optimizer, criterion, train_loader, \
                     device, epoch, print_freq = 2)
 
-    # update the learning rate
-    # lr_scheduler.step()
 
     # evaluate on the test dataset
-    valid_loss = valid(model, criterion, valid_loader, device, epoch)
+    valid_loss = valid_DCAE(model, criterion, valid_loader, device, epoch)
     
     # keep track of train and valid loss history
     loss_hist.append((train_loss.val, valid_loss.val))
+
+    # update the learning rate
+    scheduler.step(train_loss.val)
+
+    print("-----------------")
 
     # checkpoint
     # if (it + 1) % (num_epochs // checkpoint_freq) == 0:
@@ -168,6 +194,7 @@ len(images)
 output = model(images.to(device=device))
 # prep images for display
 images = images.cpu().numpy()
+images = images[:,0,:,:][:,None,:,:]
 
 # output is resized into a batch of images
 print(len(output))

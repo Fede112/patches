@@ -28,13 +28,10 @@ class DenseNet_CAE(nn.Module):
         self.generator = Generator256(**gen_param)
 
     def forward(self, x):
-        print(x.shape)
-        print('densenet..')
         x = self.densenet121(x)
         x = x[:,:, None, None]
-        print('generator.. ')
-        print(x.shape)
         x = self.generator(x)
+        return x
 
 
 
@@ -85,19 +82,35 @@ class Basic_CAE(nn.Module):
 
 class Average_CAE(nn.Module):
     def __init__(self):
-        super(Basic_CAE, self).__init__()
+        super(Average_CAE, self).__init__()
         
         ## encoder layers ##
         self.conv1 = nn.Conv2d(1, 32, 3, padding = 1)
+        self.conv1_b = nn.Conv2d(32, 32, 3, padding = 1)
+
         self.conv2 = nn.Conv2d(32, 64, 3, padding = 1)
+        self.conv2_b = nn.Conv2d(64, 64, 3, padding = 1)
+
         self.conv3 = nn.Conv2d(64, 128, 3, padding = 1)
+        self.conv3_b = nn.Conv2d(128, 128, 3, padding = 1)
+
         self.pool = nn.MaxPool2d(2, 2)
         
         ## decoder layers ##
         self.t_conv1 = nn.Conv2d(128, 128, 3, padding = 1)
-        self.t_conv2 = nn.Conv2d(128, 64, 3, padding = 1)
-        self.t_conv3 = nn.Conv2d(64, 1, 3, padding = 1)
-        self.upsampling = nn.modules.upsampling.Upsample(scale_factor=2, mode='nearest')
+        self.t_conv1_b = nn.Conv2d(128, 64, 3, padding = 1)
+        
+        self.t_conv2 = nn.Conv2d(64, 64, 3, padding = 1)
+        self.t_conv2_b = nn.Conv2d(64, 32, 3, padding = 1)
+        
+        self.t_conv3 = nn.Conv2d(32, 32, 3, padding = 1)
+        self.t_conv3_b = nn.Conv2d(32, 1, 3, padding = 1)
+        
+
+
+
+# self.upsampling = nn.modules.upsampling.Upsample(scale_factor=2, mode='nearest')
+        self.upsampling = Upsample(scale_factor=2, mode='nearest')
 #         self.t_conv3 = nn.ConvTranspose2d(4, 2, 2, stride=2)
 #         self.t_conv4 = nn.ConvTranspose2d(2, 1, 2, stride=2)
 #         self.t_conv4 = nn.ConvTranspose2d(2, 1, 2, stride=2)
@@ -110,18 +123,30 @@ class Average_CAE(nn.Module):
         ## encode ##
         x = F.relu(self.conv1(x))
         x = self.pool(x)
+        x = F.relu(self.conv1_b(x))
+        x = self.pool(x)
         x = F.relu(self.conv2(x))
         x = self.pool(x)
+        x = F.relu(self.conv2_b(x))
+        x = self.pool(x)
         x = F.relu(self.conv3(x))
+        x = self.pool(x)
+        x = F.relu(self.conv3_b(x))
 
 
        
         ## decode ##
         x = F.relu(self.t_conv1(x))
         x = self.upsampling(x)
+        x = F.relu(self.t_conv1_b(x))
+        x = self.upsampling(x)
         x = F.relu(self.t_conv2(x))
         x = self.upsampling(x)
-        x = torch.sigmoid(self.t_conv3(x))
+        x = F.relu(self.t_conv2_b(x))
+        x = self.upsampling(x)
+        x = F.relu(self.t_conv3(x))
+        x = self.upsampling(x)
+        x = torch.sigmoid(self.t_conv3_b(x))
                 
         return x
 
@@ -145,6 +170,8 @@ class Upsample(nn.Module):
         x = self.interp(x, scale_factor=self.scale_factor, mode=self.mode)
         return x
 
+
+
 class Generator256(nn.Module):
     def __init__(self, nz, ngf, nc, ngpu):
         super(Generator256, self).__init__()
@@ -160,45 +187,46 @@ class Generator256(nn.Module):
 
             #256x4x4
             nn.Conv2d(512, 256, 3, padding = 1),
-            nn.BatchNorm2d(256),
+            nn.BatchNorm2d(256, momentum = 0.1),
             nn.ReLU(True),
             Upsample(scale_factor = 2, mode='nearest'),
 
             
             #256x8x8
             nn.Conv2d(256, 128, 3, padding = 1),
-            nn.BatchNorm2d(128),
+            nn.BatchNorm2d(128, momentum = 0.1),
             nn.ReLU(True),
             Upsample(scale_factor = 2, mode='nearest'),
         
             #128x16x16
             nn.Conv2d(128, 64, 3, padding = 1),
-            nn.BatchNorm2d(64),
+            nn.BatchNorm2d(64, momentum = 0.1),
             nn.ReLU(True),
             Upsample(scale_factor = 2, mode='nearest'),
 
             #64x32x32
             nn.Conv2d(64, 32, 3, padding = 1),
-            nn.BatchNorm2d(32),
+            nn.BatchNorm2d(32, momentum = 0.1),
             nn.ReLU(True),
             Upsample(scale_factor = 2, mode='nearest'),
 
         
             #32x64x64
             nn.Conv2d(32, 16, 3, padding = 1),
-            nn.BatchNorm2d(16),
+            nn.BatchNorm2d(16, momentum = 0.1),
             nn.ReLU(True),
             Upsample(scale_factor = 2, mode='nearest'),
 
         
             #16x128x128
             nn.Conv2d(16, 8, 3, padding = 1),
-            nn.BatchNorm2d(8),
+            nn.BatchNorm2d(8, momentum = 0.1),
             nn.ReLU(True),
             Upsample(scale_factor = 2, mode='nearest'),
 
             #8x256x256
             nn.Conv2d(8, 1, 3, padding = 1),
+            # nn.Tanh()
             # sigmoid activation to output
 
         )
@@ -206,7 +234,44 @@ class Generator256(nn.Module):
     def forward(self, x):
         x = self.main(x)
         x = torch.sigmoid(x)
+        # x = 3*x # for nn.Tanh()
         return x
+
+
+class Generator256_bis(nn.Module):
+    def __init__(self, input_size=200, alpha=0.2):
+        super(Generator, self).__init__()       
+        kernel_size = 4
+        padding = 1
+        stride = 2
+        
+        # self.input = nn.Linear(input_size, 4 * 4 * 1024)
+        self.net = nn.Sequential(
+            nn.BatchNorm2d(1024),
+            nn.LeakyReLU(alpha),
+            nn.ConvTranspose2d(1024, 512, kernel_size, stride, padding),
+            nn.BatchNorm2d(512),
+            nn.LeakyReLU(alpha),
+            nn.ConvTranspose2d(512, 512, kernel_size, stride, padding),
+            nn.BatchNorm2d(512),
+            nn.LeakyReLU(alpha),
+            nn.ConvTranspose2d(512, 512, kernel_size, stride, padding),
+            nn.BatchNorm2d(512),
+            nn.LeakyReLU(alpha),
+            nn.ConvTranspose2d(512, 256, kernel_size, stride, padding),
+            nn.BatchNorm2d(256),
+            nn.LeakyReLU(alpha),
+            nn.ConvTranspose2d(256, 128, kernel_size, stride, padding),
+            nn.BatchNorm2d(128),
+            nn.LeakyReLU(alpha),
+            nn.ConvTranspose2d(128, 1, kernel_size, stride, padding),
+            nn.Tanh()
+        )
+  
+    def forward(self, x):
+        x = self.net(x)
+        return x
+
 
 
 
