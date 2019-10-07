@@ -200,26 +200,27 @@ def save_checkpoint(epoch, model, optimizer, scheduler, criterion, loss_hist, sa
 def main():
 
     # Dataloader parameters
-    batch_size = 2
+    batch_size = 80
     validation_split = .2
     shuffle_dataset = True
     random_seed= 42
 
     # Training parameters
-    num_epochs = 20
+    num_epochs = 100
     lr = 0.0005
     # number of checkpoints
     checkpoint_freq = 1
-    preload_weights = True
+    preload_weights = False
 
 
     # Paths
-    images_path = '../../patches_images/test/'
-    # images_path = '/scratch/fbarone/test_256/'
-    save_checkpoint_path = '/home/fede/Documents/mhpc/mhpc-thesis/code/patches_models'
-    load_checkpoint_file = '/home/fede/Documents/mhpc/mhpc-thesis/code/patches_models/20191007-152356_Average_CAE-128x8x8.pt'
-    # load_checkpoint_path =
+    # images_path = '../../patches_images/test/'
+    # save_checkpoint_path = '/home/fede/Documents/mhpc/mhpc-thesis/code/patches_models'
+    # load_checkpoint_file = '/home/fede/Documents/mhpc/mhpc-thesis/code/patches_models/20191007-152356_Average_CAE-128x8x8.pt'
 
+    images_path = '/scratch/fbarone/test_256/'
+    save_checkpoint_path = '/scratch/fbarone/cae_models'
+    load_checkpoint_file = '/scratch/fbarone/cae_models/20191007-152356_Average_CAE-128x8x8.pt'
 
 
 
