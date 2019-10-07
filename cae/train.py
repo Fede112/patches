@@ -1,8 +1,10 @@
 # based on https://github.com/foamliu/Autoencoder/blob/master/train.py
 import sys
+import os
 import time
 import numpy as np
 import matplotlib.pyplot as plt
+import time
 from tqdm import tqdm
 
 import torch
@@ -24,7 +26,8 @@ from utils import read_image_png
 from models import Basic_CAE
 from models import Average_CAE
 
-sys.path.insert(0,'/u/f/fbarone/Documents/patches/')
+# sys.path.insert(0,'/u/f/fbarone/Documents/patches/')
+sys.path.insert(0,'../')
 
 import mm_patch.transforms 
 from mm_patch.utils import image_from_index
@@ -164,15 +167,61 @@ def valid_DCAE(model, criterion, val_loader, device, epoch):
     return losses
 
 
+def save_checkpoint(epoch, model, optimizer, scheduler, criterion, loss_hist, save_path, is_best = False):
+    """
+    Saves the training state.
+    """
+
+    timestr = time.strftime("%Y%m%d-%H%M%S")
+
+    filename = timestr + '_' + model.__class__.__name__ + '-' + '128x8x8' +'.pt'
+    filepath = os.path.join(save_path, filename)
+
+    checkpoint = {}
+
+    checkpoint['epoch'] = epoch + 1
+    checkpoint['state_dict'] = model.state_dict()
+    checkpoint['optimizer'] = optimizer.state_dict()
+    checkpoint['scheduler'] = scheduler.state_dict()
+    checkpoint['criterion'] = criterion.__class__.__name__
+    checkpoint['history'] = loss_hist
+
+
+    torch.save(checkpoint, filepath)
+    # if is_best:
+    #     bestname = os.path.join(save_path, 'model_best_{0}.pth.tar'.format(timestamp))
+    #     shutil.copyfile(filename, bestname)
+
+# def resume_checkpoint(epoch, model, optimizer, scheduler, loss_hist, filename, is_best = False)
+
+
 
 
 def main():
 
     # Dataloader parameters
-    batch_size = 80
+    batch_size = 2
     validation_split = .2
     shuffle_dataset = True
     random_seed= 42
+
+    # Training parameters
+    num_epochs = 20
+    lr = 0.0005
+    # number of checkpoints
+    checkpoint_freq = 1
+    preload_weights = True
+
+
+    # Paths
+    images_path = '../../patches_images/test/'
+    # images_path = '/scratch/fbarone/test_256/'
+    save_checkpoint_path = '/home/fede/Documents/mhpc/mhpc-thesis/code/patches_models'
+    load_checkpoint_file = '/home/fede/Documents/mhpc/mhpc-thesis/code/patches_models/20191007-152356_Average_CAE-128x8x8.pt'
+    # load_checkpoint_path =
+
+
+
 
     # Transformations to be compatible with Densenet-121 from NYU paper.
     # Note I am using mean and std as recommended in Pytorch. Maybe calculating the dataset statistics is better.
@@ -185,7 +234,8 @@ def main():
                                 ])
 
     # Dataset
-    patches = datasets.ImageFolder('/scratch/fbarone/test_256/', transform = composed, target_transform=None, loader=read_image_png)
+    # patches = datasets.ImageFolder('/scratch/fbarone/test_256/', transform = composed, target_transform=None, loader=read_image_png)
+    patches = datasets.ImageFolder(images_path, transform = composed, target_transform=None, loader=read_image_png)
 
 
     # Creating data indices for training and validation splits:
@@ -219,16 +269,18 @@ def main():
     # model = Basic_CAE().to(device)
     model = Average_CAE().to(device)
 
-    # print summary]
+    # preload weights
+    if preload_weights:
+        checkpoint = torch.load(load_checkpoint_file)
+        print(checkpoint['criterion'])
+        model.load_state_dict(checkpoint['state_dict'])
+
+
+    # print summary
     # summary(your_model, input_size=(channels, H, W))
     summary(model, input_size=(1, 256, 256), device = 'cuda')
 
 
-    # Training parameters
-    num_epochs = 300
-    lr = 0.0005
-    # number of checpoints
-    checkpoint_freq = 1
 
     # loss function
     criterion = nn.MSELoss()
@@ -237,6 +289,14 @@ def main():
     # optimizer algorithm
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     # optimizer = torch.optim.RMSprop(model.parameters())
+
+    # factor = decaying factor
+    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=10, verbose=True)
+
+    # training and validation loss recorder
+    loss_hist = []
+
+
 
     print("----------------------------------------------------------------")
     print('\n')
@@ -247,11 +307,6 @@ def main():
             batch_size: {batch_size}')
     print("================================================================")
 
-
-    # factor = decaying factor
-    scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=10, verbose=True)
-
-    loss_hist = []
     for it, epoch in enumerate(range(num_epochs)):
         # train for one epoch, printing every 10 iterations
         train_loss = train_one_epoch(model, optimizer, criterion, train_loader, \
@@ -269,9 +324,13 @@ def main():
         print("-----------------")
 
         # checkpoint
-        # if (it + 1) % (num_epochs // checkpoint_freq) == 0:
+        if (it + 1) % (num_epochs // checkpoint_freq) == 0:
+            save_checkpoint(epoch, model, optimizer, scheduler, criterion, loss_hist, save_checkpoint_path)
+
+
 
     print("================================================================")
+
 
     # Plot results
     # obtain one batch of test images
@@ -313,6 +372,7 @@ def main():
     ax.set_ylabel('Loss')
     ax.legend()
     plt.show()
+
 
 if __name__ == '__main__':
     main()
