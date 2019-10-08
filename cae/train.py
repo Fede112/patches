@@ -206,7 +206,7 @@ def main():
     random_seed= 42
 
     # Training parameters
-    num_epochs = 100
+    num_epochs = 20
     lr = 0.0005
     # number of checkpoints
     checkpoint_freq = 1
@@ -268,7 +268,7 @@ def main():
 
     # initialize the NN model
     # model = Basic_CAE().to(device)
-    model = Average_CAE().to(device)
+    model = Average_CAE_bn().to(device)
 
     # preload weights
     if preload_weights:

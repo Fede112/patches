@@ -171,6 +171,109 @@ class Upsample(nn.Module):
         return x
 
 
+class Avergate_CAE_bn(nn.Module):
+    def __init__(self, nz, ngf, nc, ngpu):
+        super(Avergate_CAE_bn, self).__init__()
+
+        self.encoder = nn.Sequential(
+
+            # output: 32x128x128
+            nn.Conv2d(1, 32, 3, padding = 1),
+            nn.BatchNorm2d(32, momentum = 0.1),
+            nn.ReLU(True),
+            nn.MaxPool2d(2, 2),
+
+            # 32x64x64
+            nn.Conv2d(32, 32, 3, padding = 1),
+            nn.BatchNorm2d(32, momentum = 0.1),
+            nn.ReLU(True),
+            nn.MaxPool2d(2, 2),
+
+            # 64x32x32
+            nn.Conv2d(32, 64, 3, padding = 1),
+            nn.BatchNorm2d(64, momentum = 0.1),
+            nn.ReLU(True),
+            nn.MaxPool2d(2, 2),
+
+            # 64x16x16
+            nn.Conv2d(64, 64, 3, padding = 1),
+            nn.BatchNorm2d(64, momentum = 0.1),
+            nn.ReLU(True),
+            nn.MaxPool2d(2, 2),
+
+            # 128x8x8
+            nn.Conv2d(64, 128, 3, padding = 1),
+            nn.BatchNorm2d(128, momentum = 0.1),
+            nn.ReLU(True),
+            nn.MaxPool2d(2, 2),
+
+            # 128x8x8
+            nn.Conv2d(128, 128, 3, padding = 1),
+            nn.BatchNorm2d(128, momentum = 0.1),
+            nn.ReLU(True),
+            # nn.MaxPool2d(2, 2),
+            )
+
+
+        self.decoder = nn.Sequential(
+
+            # Padding compatible with Keras Upsample
+            # torch.nn.ZeroPad2d((1, 2, 1, 2)),
+            
+            # nn.ConvTranspose2d(128, 128, 4), # ~ 8kk parameters
+            # nn.BatchNorm2d(128),
+            # nn.ReLU(True),
+            # Upsample(scale_factor = 2, mode='nearest'),
+
+            # output: 128x16x16
+            nn.Conv2d(128, 128, 3, padding = 1),
+            nn.BatchNorm2d(128, momentum = 0.1),
+            nn.ReLU(True),
+            Upsample(scale_factor = 2, mode='nearest'),
+
+            
+            # 64x32x32
+            nn.Conv2d(128, 64, 3, padding = 1),
+            nn.BatchNorm2d(64, momentum = 0.1),
+            nn.ReLU(True),
+            Upsample(scale_factor = 2, mode='nearest'),
+        
+            # 64x64x64
+            nn.Conv2d(64, 64, 3, padding = 1),
+            nn.BatchNorm2d(64, momentum = 0.1),
+            nn.ReLU(True),
+            Upsample(scale_factor = 2, mode='nearest'),
+
+            # 32x128x128
+            nn.Conv2d(64, 32, 3, padding = 1),
+            nn.BatchNorm2d(32, momentum = 0.1),
+            nn.ReLU(True),
+            Upsample(scale_factor = 2, mode='nearest'),
+
+        
+            # 32x256x256
+            nn.Conv2d(32, 32, 3, padding = 1),
+            nn.BatchNorm2d(32, momentum = 0.1),
+            nn.ReLU(True),
+            Upsample(scale_factor = 2, mode='nearest'),
+
+        
+            # 1x256x256
+            nn.Conv2d(32, 1, 3, padding = 1),
+            nn.BatchNorm2d(1, momentum = 0.1),
+            nn.ReLU(True),
+
+        )
+
+    def forward(self, x):
+        x = self.encoder(x)
+        x = self.decoder(x)
+        x = torch.sigmoid(x)
+        # x = 3*x # for nn.Tanh()
+        return x
+
+
+
 
 class Generator256(nn.Module):
     def __init__(self, nz, ngf, nc, ngpu):
