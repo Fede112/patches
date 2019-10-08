@@ -171,15 +171,15 @@ class Upsample(nn.Module):
         return x
 
 
-class Avergate_CAE_bn(nn.Module):
-    def __init__(self, nz, ngf, nc, ngpu):
-        super(Avergate_CAE_bn, self).__init__()
+class Average_CAE_bn(nn.Module):
+    def __init__(self):
+        super(Average_CAE_bn, self).__init__()
 
         self.encoder = nn.Sequential(
 
             # output: 32x128x128
             nn.Conv2d(1, 32, 3, padding = 1),
-            nn.BatchNorm2d(32, momentum = 0.1),
+            # nn.BatchNorm2d(32, momentum = 0.1),
             nn.ReLU(True),
             nn.MaxPool2d(2, 2),
 
@@ -191,7 +191,7 @@ class Avergate_CAE_bn(nn.Module):
 
             # 64x32x32
             nn.Conv2d(32, 64, 3, padding = 1),
-            nn.BatchNorm2d(64, momentum = 0.1),
+            # nn.BatchNorm2d(64, momentum = 0.1),
             nn.ReLU(True),
             nn.MaxPool2d(2, 2),
 
@@ -203,7 +203,7 @@ class Avergate_CAE_bn(nn.Module):
 
             # 128x8x8
             nn.Conv2d(64, 128, 3, padding = 1),
-            nn.BatchNorm2d(128, momentum = 0.1),
+            # nn.BatchNorm2d(128, momentum = 0.1),
             nn.ReLU(True),
             nn.MaxPool2d(2, 2),
 

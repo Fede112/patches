@@ -25,6 +25,7 @@ from utils import ExpoAverageMeter
 from utils import read_image_png
 from models import Basic_CAE
 from models import Average_CAE
+from models import Average_CAE_bn
 
 # sys.path.insert(0,'/u/f/fbarone/Documents/patches/')
 sys.path.insert(0,'../')
