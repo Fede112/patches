@@ -201,7 +201,7 @@ def save_checkpoint(epoch, model, optimizer, scheduler, criterion, loss_hist, sa
 def main():
 
     # Dataloader parameters
-    batch_size = 80
+    batch_size = 32
     validation_split = .2
     shuffle_dataset = True
     random_seed= 42
@@ -374,8 +374,12 @@ def main():
     ax.set_xlabel('epoch')
     ax.set_ylabel('Loss')
     ax.legend()
-    plt.show()
+    # plt.show()
 
+
+
+    fig.savefig(model.__class__.__name__ + '.png', bbox_inches='tight')
+    fig_hist.savefig(model.__class__.__name__ + 'hist.png', bbox_inches='tight')
 
 if __name__ == '__main__':
     main()
