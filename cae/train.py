@@ -208,7 +208,8 @@ def main():
 
     # Training parameters
     num_epochs = 20
-    lr = 0.0005
+    # lr = 0.0005
+    lr = 0.002
     # number of checkpoints
     checkpoint_freq = 1
     preload_weights = False

@@ -227,7 +227,7 @@ class Average_CAE_bn(nn.Module):
 
             # output: 128x16x16
             nn.Conv2d(128, 128, 3, padding = 1),
-            nn.BatchNorm2d(128, momentum = 0.1),
+            # nn.BatchNorm2d(128, momentum = 0.1),
             nn.ReLU(True),
             Upsample(scale_factor = 2, mode='nearest'),
 
@@ -246,7 +246,7 @@ class Average_CAE_bn(nn.Module):
 
             # 32x128x128
             nn.Conv2d(64, 32, 3, padding = 1),
-            nn.BatchNorm2d(32, momentum = 0.1),
+            # nn.BatchNorm2d(32, momentum = 0.1),
             nn.ReLU(True),
             Upsample(scale_factor = 2, mode='nearest'),
 
@@ -260,7 +260,7 @@ class Average_CAE_bn(nn.Module):
         
             # 1x256x256
             nn.Conv2d(32, 1, 3, padding = 1),
-            nn.BatchNorm2d(1, momentum = 0.1),
+            # nn.BatchNorm2d(1, momentum = 0.1),
             nn.ReLU(True),
 
         )
