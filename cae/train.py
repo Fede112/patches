@@ -25,6 +25,7 @@ from utils import ExpoAverageMeter
 from utils import read_image_png
 from models import Basic_CAE
 from models import Average_CAE
+from models import Average_CAE_deep
 from models import Average_CAE_bn
 
 # sys.path.insert(0,'/u/f/fbarone/Documents/patches/')
@@ -180,6 +181,7 @@ def save_checkpoint(epoch, model, optimizer, scheduler, criterion, loss_hist, sa
 
     checkpoint = {}
 
+    checkpoint['name'] = filename
     checkpoint['epoch'] = epoch + 1
     checkpoint['state_dict'] = model.state_dict()
     checkpoint['optimizer'] = optimizer.state_dict()
@@ -187,8 +189,9 @@ def save_checkpoint(epoch, model, optimizer, scheduler, criterion, loss_hist, sa
     checkpoint['criterion'] = criterion.__class__.__name__
     checkpoint['history'] = loss_hist
 
-
     torch.save(checkpoint, filepath)
+
+    return checkpoint
     # if is_best:
     #     bestname = os.path.join(save_path, 'model_best_{0}.pth.tar'.format(timestamp))
     #     shutil.copyfile(filename, bestname)
@@ -201,15 +204,15 @@ def save_checkpoint(epoch, model, optimizer, scheduler, criterion, loss_hist, sa
 def main():
 
     # Dataloader parameters
-    batch_size = 32
+    batch_size = 128
     validation_split = .2
     shuffle_dataset = True
     random_seed= 42
 
     # Training parameters
-    num_epochs = 20
-    # lr = 0.0005
+    num_epochs = 500
     lr = 0.002
+    # lr = 0.002
     # number of checkpoints
     checkpoint_freq = 1
     preload_weights = False
@@ -220,10 +223,15 @@ def main():
     # save_checkpoint_path = '/home/fede/Documents/mhpc/mhpc-thesis/code/patches_models'
     # load_checkpoint_file = '/home/fede/Documents/mhpc/mhpc-thesis/code/patches_models/20191007-152356_Average_CAE-128x8x8.pt'
 
-    images_path = '/scratch/fbarone/test_256/'
-    save_checkpoint_path = '/scratch/fbarone/cae_models'
-    load_checkpoint_file = '/scratch/fbarone/cae_models/20191007-152356_Average_CAE-128x8x8.pt'
+    # images_path = '/scratch/fbarone/test_256/'
+    # output_path = '.'
+    # save_checkpoint_path = '/scratch/fbarone/cae_models'
+    # load_checkpoint_file = '/scratch/fbarone/cae_models/20191007-152356_Average_CAE-128x8x8.pt'
 
+    images_path = '/scratch/fbarone/test_256/'
+    output_path = './output/images'
+    save_checkpoint_path = './output/cae_models'
+    load_checkpoint_file = '/scratch/fbarone/cae_models/20191007-152356_Average_CAE-128x8x8.pt'
 
 
     # Transformations to be compatible with Densenet-121 from NYU paper.
@@ -263,14 +271,15 @@ def main():
                                 num_workers=10, pin_memory=True, drop_last=True)
 
     # check for nvidia library
-    # assert torch.has_cudnn == True, 'No cudnn library!'
+    assert torch.has_cudnn == True, 'No cudnn library!'
 
     # set device
     device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+
     # initialize the NN model
     # model = Basic_CAE().to(device)
-    model = Average_CAE().to(device)
+    model = Average_CAE_deep().to(device)
 
     # preload weights
     if preload_weights:
@@ -282,7 +291,6 @@ def main():
     # print summary
     # summary(your_model, input_size=(channels, H, W))
     summary(model, input_size=(1, 256, 256), device = 'cuda')
-
 
 
     # loss function
@@ -328,7 +336,7 @@ def main():
 
         # checkpoint
         if (it + 1) % (num_epochs // checkpoint_freq) == 0:
-            save_checkpoint(epoch, model, optimizer, scheduler, criterion, loss_hist, save_checkpoint_path)
+            checkpoint = save_checkpoint(epoch, model, optimizer, scheduler, criterion, loss_hist, save_checkpoint_path)
 
 
 
@@ -377,9 +385,12 @@ def main():
     # plt.show()
 
 
+    # output figures
 
-    fig.savefig(model.__class__.__name__ + '.png', bbox_inches='tight')
-    fig_hist.savefig(model.__class__.__name__ + 'hist.png', bbox_inches='tight')
+    fig_path = os.path.join( output_path, checkpoint['name'][:-3] + '.png' )
+    fig_hist_path = os.path.join( output_path ,checkpoint['name'][:-3] + '_hist.png')
+    fig.savefig(fig_path, bbox_inches='tight')
+    fig_hist.savefig(fig_hist_path, bbox_inches='tight')
 
 if __name__ == '__main__':
     main()
