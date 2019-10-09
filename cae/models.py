@@ -94,9 +94,15 @@ class Average_CAE(nn.Module):
         self.conv3 = nn.Conv2d(64, 128, 3, padding = 1)
         self.conv3_b = nn.Conv2d(128, 128, 3, padding = 1)
 
+        self.conv4 = nn.Conv2d(128, 256, 3, padding = 1)
+        # self.conv3_b = nn.Conv2d(256, 256, 3, padding = 1)
+
         self.pool = nn.MaxPool2d(2, 2)
         
         ## decoder layers ##
+        
+        self.t_conv0 = nn.Conv2d(256, 128, 3, padding = 1)
+
         self.t_conv1 = nn.Conv2d(128, 128, 3, padding = 1)
         self.t_conv1_b = nn.Conv2d(128, 64, 3, padding = 1)
         
@@ -132,10 +138,14 @@ class Average_CAE(nn.Module):
         x = F.relu(self.conv3(x))
         x = self.pool(x)
         x = F.relu(self.conv3_b(x))
+        x = self.pool(x)
+        x = F.relu(self.conv4(x))
 
 
        
         ## decode ##
+        x = F.relu(self.t_conv0(x))
+        x = self.upsampling(x)
         x = F.relu(self.t_conv1(x))
         x = self.upsampling(x)
         x = F.relu(self.t_conv1_b(x))

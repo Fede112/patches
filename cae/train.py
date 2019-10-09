@@ -216,13 +216,13 @@ def main():
 
 
     # Paths
-    images_path = '../../patches_images/test/'
-    save_checkpoint_path = '/home/fede/Documents/mhpc/mhpc-thesis/code/patches_models'
-    load_checkpoint_file = '/home/fede/Documents/mhpc/mhpc-thesis/code/patches_models/20191007-152356_Average_CAE-128x8x8.pt'
+    # images_path = '../../patches_images/test/'
+    # save_checkpoint_path = '/home/fede/Documents/mhpc/mhpc-thesis/code/patches_models'
+    # load_checkpoint_file = '/home/fede/Documents/mhpc/mhpc-thesis/code/patches_models/20191007-152356_Average_CAE-128x8x8.pt'
 
-    # images_path = '/scratch/fbarone/test_256/'
-    # save_checkpoint_path = '/scratch/fbarone/cae_models'
-    # load_checkpoint_file = '/scratch/fbarone/cae_models/20191007-152356_Average_CAE-128x8x8.pt'
+    images_path = '/scratch/fbarone/test_256/'
+    save_checkpoint_path = '/scratch/fbarone/cae_models'
+    load_checkpoint_file = '/scratch/fbarone/cae_models/20191007-152356_Average_CAE-128x8x8.pt'
 
 
 
@@ -270,7 +270,7 @@ def main():
 
     # initialize the NN model
     # model = Basic_CAE().to(device)
-    model = Average_CAE_bn().to(device)
+    model = Average_CAE().to(device)
 
     # preload weights
     if preload_weights:
