@@ -205,14 +205,14 @@ def save_checkpoint(epoch, model, optimizer, scheduler, criterion, loss_hist, sa
 def main():
 
     # Dataloader parameters
-    batch_size = 64
+    batch_size = 128
     validation_split = .2
     shuffle_dataset = True
     # random_seed= 42
     random_seed= 13
 
     # Training parameters
-    num_epochs = 50
+    num_epochs = 300
     lr = 0.002
     # lr = 0.002
     # number of checkpoints
@@ -340,14 +340,14 @@ def main():
 
 
 
-    print("----------------------------------------------------------------")
-    print("Initially freezed parameters:")
-    for name, param in model.named_parameters():
-        if name in pretrained_model_dict.keys():
-            # model.param.requires_grad = False
-            print(name)           
-            param.requires_grad = False
-    print("----------------------------------------------------------------")
+    # print("----------------------------------------------------------------")
+    # print("Initially freezed parameters:")
+    # for name, param in model.named_parameters():
+    #     if name in pretrained_model_dict.keys():
+    #         # model.param.requires_grad = False
+    #         print(name)           
+    #         param.requires_grad = False
+    # print("----------------------------------------------------------------")
         
     # print summary
     # summary(your_model, input_size=(channels, H, W))
@@ -369,11 +369,11 @@ def main():
 
     for it, epoch in enumerate(range(num_epochs)):
 
-        if epoch == unfreeze_epoch:
-            for name, param in model.named_parameters():
-                if name in pretrained_model_dict.keys():
-                    # model.param.requires_grad = False
-                    param.requires_grad = True
+        # if epoch == unfreeze_epoch:
+        #     for name, param in model.named_parameters():
+        #         if name in pretrained_model_dict.keys():
+        #             # model.param.requires_grad = False
+        #             param.requires_grad = True
             
         # train for one epoch, printing every 10 iterations
         train_loss = train_one_epoch(model, optimizer, criterion, train_loader, \
