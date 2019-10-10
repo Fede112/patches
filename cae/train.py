@@ -5,6 +5,7 @@ import time
 import numpy as np
 import matplotlib.pyplot as plt
 import time
+import itertools
 from tqdm import tqdm
 
 import torch
@@ -176,7 +177,7 @@ def save_checkpoint(epoch, model, optimizer, scheduler, criterion, loss_hist, sa
 
     timestr = time.strftime("%Y%m%d-%H%M%S")
 
-    filename = timestr + '_' + model.__class__.__name__ + '-' + '128x8x8' +'.pt'
+    filename = timestr + '_' + model.__class__.__name__ + '-' + '512x4x4' +'.pt'
     filepath = os.path.join(save_path, filename)
 
     checkpoint = {}
@@ -196,7 +197,7 @@ def save_checkpoint(epoch, model, optimizer, scheduler, criterion, loss_hist, sa
     #     bestname = os.path.join(save_path, 'model_best_{0}.pth.tar'.format(timestamp))
     #     shutil.copyfile(filename, bestname)
 
-# def resume_checkpoint(epoch, model, optimizer, scheduler, loss_hist, filename, is_best = False)
+# def resume_checkpoint(epoch, model, optimizer, scheduler, loss_hist, filepath, is_best = False)
 
 
 
@@ -204,18 +205,20 @@ def save_checkpoint(epoch, model, optimizer, scheduler, criterion, loss_hist, sa
 def main():
 
     # Dataloader parameters
-    batch_size = 128
+    batch_size = 64
     validation_split = .2
     shuffle_dataset = True
-    random_seed= 42
+    # random_seed= 42
+    random_seed= 13
 
     # Training parameters
-    num_epochs = 500
+    num_epochs = 50
     lr = 0.002
     # lr = 0.002
     # number of checkpoints
     checkpoint_freq = 1
-    preload_weights = False
+    pretrained_weights = True
+    unfreeze_epoch = num_epochs // 2
 
 
     # Paths
@@ -231,7 +234,7 @@ def main():
     images_path = '/scratch/fbarone/test_256/'
     output_path = './output/images'
     save_checkpoint_path = './output/cae_models'
-    load_checkpoint_file = '/scratch/fbarone/cae_models/20191007-152356_Average_CAE-128x8x8.pt'
+    load_checkpoint_file = './output/cae_models/20191009-232545_Average_CAE_deep-256x8x8.pt'
 
 
     # Transformations to be compatible with Densenet-121 from NYU paper.
@@ -281,16 +284,33 @@ def main():
     # model = Basic_CAE().to(device)
     model = Average_CAE_deep().to(device)
 
-    # preload weights
-    if preload_weights:
-        checkpoint = torch.load(load_checkpoint_file)
-        print(checkpoint['criterion'])
-        model.load_state_dict(checkpoint['state_dict'])
 
 
-    # print summary
-    # summary(your_model, input_size=(channels, H, W))
-    summary(model, input_size=(1, 256, 256), device = 'cuda')
+    # pretrained weights
+    pretrained_model_dict = {}
+    if pretrained_weights:
+        print("----------------------------------------------------------------")
+        print("Loading pretrained weights...")
+
+        ## Load subset of pretrained model
+        # sub_model keys
+        model_dict = model.state_dict()
+        # load full model pretrained dict
+        pretrained_model_dict = torch.load(load_checkpoint_file)['state_dict']
+        # subnet I want to extract from the full model
+        # subnet_prefix = 'four_view_resnet.cc.'
+
+        # From pytorch discuss: https://discuss.pytorch.org/t/how-to-load-part-of-pre-trained-model/1113/16
+        # 1. filter out unnecessary keys
+        pretrained_model_dict = {k: v for k, v in pretrained_model_dict.items() if k in model_dict}
+        # 2. overwrite entries in the existing state dict
+        model_dict.update(pretrained_model_dict) 
+        # 3. load the new state dict
+        model.load_state_dict(model_dict)
+
+        print("----------------------------------------------------------------")
+
+
 
 
     # loss function
@@ -309,7 +329,6 @@ def main():
 
 
 
-    print("----------------------------------------------------------------")
     print('\n')
     print("----------------------------------------------------------------")
     print("Start training...")
@@ -318,7 +337,44 @@ def main():
             batch_size: {batch_size}')
     print("================================================================")
 
+
+
+
+    print("----------------------------------------------------------------")
+    print("Initially freezed parameters:")
+    for name, param in model.named_parameters():
+        if name in pretrained_model_dict.keys():
+            # model.param.requires_grad = False
+            print(name)           
+            param.requires_grad = False
+    print("----------------------------------------------------------------")
+        
+    # print summary
+    # summary(your_model, input_size=(channels, H, W))
+    summary(model, input_size=(1, 256, 256), device = 'cuda')
+
+    # for name, child in model.named_children():
+    #     for child 
+    #     if name in pretrained_model_dict.keys():
+    #         print(name + ' is frozen')
+    #         for param in child.parameters():
+    #             param.requires_grad = False
+    #     else:
+    #         print(name + ' is un frozen')
+    #         for param in child.parameters():
+    #             print(param.name)
+    #             param.requires_grad = True
+
+
+
     for it, epoch in enumerate(range(num_epochs)):
+
+        if epoch == unfreeze_epoch:
+            for name, param in model.named_parameters():
+                if name in pretrained_model_dict.keys():
+                    # model.param.requires_grad = False
+                    param.requires_grad = True
+            
         # train for one epoch, printing every 10 iterations
         train_loss = train_one_epoch(model, optimizer, criterion, train_loader, \
                         device, epoch, print_freq = 2)
