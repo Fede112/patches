@@ -180,11 +180,13 @@ class Average_CAE_deep(nn.Module):
 
         self.pool = nn.MaxPool2d(2, 2)
         
-        ## decoder layers ##
+       ## decoder layers ##
+     
         
         self.t_conv7 = nn.Conv2d(512, 512, 3, padding = 1)
 
         self.t_conv6 = nn.Conv2d(512, 256, 3, padding = 1)
+
 
         self.t_conv0 = nn.Conv2d(256, 256, 3, padding = 1)
 
@@ -199,16 +201,11 @@ class Average_CAE_deep(nn.Module):
         self.t_conv5 = nn.Conv2d(16, 1, 3, padding = 1)
         
 
-
-
-# self.upsampling = nn.modules.upsampling.Upsample(scale_factor=2, mode='nearest')
         self.upsampling = Upsample(scale_factor=2, mode='nearest')
-#         self.t_conv3 = nn.ConvTranspose2d(4, 2, 2, stride=2)
-#         self.t_conv4 = nn.ConvTranspose2d(2, 1, 2, stride=2)
-#         self.t_conv4 = nn.ConvTranspose2d(2, 1, 2, stride=2)
-        
-        ## a kernel of 2 and a stride of 2 will increase the spatial dims by 2
-#         self.t_conv1 = nn.ConvTranspose2d(4, 16, 2, stride=2)
+        # a kernel of 2 and a stride of 2 will increase the spatial dims by 2
+        # self.t_conv1 = nn.ConvTranspose2d(4, 16, 2, stride=2)
+
+
 
         
     def forward(self, x):
@@ -223,17 +220,17 @@ class Average_CAE_deep(nn.Module):
         x = self.pool(x)
         x = F.relu(self.conv5(x))
         x = self.pool(x)
-        x = F.relu(self.conv6(x))
-        x = self.pool(x)
+        # x = F.relu(self.conv6(x))
+        # x = self.pool(x)
 
        
         ## decode ##
-        x = F.relu(self.t_conv7(x))
-        x = self.upsampling(x)
-        x = F.relu(self.t_conv6(x))
-        x = self.upsampling(x)
-        # x = F.relu(self.t_conv0(x))
+        # x = F.relu(self.t_conv7(x))
         # x = self.upsampling(x)
+        # x = F.relu(self.t_conv6(x))
+        # x = self.upsampling(x)
+        x = F.relu(self.t_conv0(x))
+        x = self.upsampling(x)
         x = F.relu(self.t_conv1(x))
         x = self.upsampling(x)
         x = F.relu(self.t_conv2(x))
@@ -245,7 +242,6 @@ class Average_CAE_deep(nn.Module):
         x = torch.sigmoid(self.t_conv5(x))
                 
         return x
-
 
 # Auxilary for Generator256
 # self.iter_example = Interpolate(size=(2, 2), mode='bilinear')
@@ -265,6 +261,116 @@ class Upsample(nn.Module):
         # x = self.interp(x, size=self.size, mode=self.mode, align_corners=False)
         x = self.interp(x, scale_factor=self.scale_factor, mode=self.mode)
         return x
+
+
+
+class Average_CAE_deep_PCA(nn.Module):
+    def __init__(self):
+        super().__init__()
+        
+        ## encoder layers ##
+        self.conv1 = nn.Conv2d(1, 16, 3, padding = 1)
+
+        self.conv2 = nn.Conv2d(16, 32, 3, padding = 1)
+
+        self.conv3 = nn.Conv2d(32, 64, 3, padding = 1)
+
+        self.conv4 = nn.Conv2d(64, 128, 3, padding = 1)
+        
+        self.conv5 = nn.Conv2d(128, 256, 3, padding = 1)
+        
+        self.conv6 = nn.Conv2d(256, 512, 3, padding = 1)
+
+        self.pool = nn.MaxPool2d(2, 2)
+        
+       ## decoder layers ##
+     
+        
+        self.t_conv7 = nn.Conv2d(512, 512, 3, padding = 1)
+
+        self.t_conv6 = nn.Conv2d(512, 256, 3, padding = 1)
+
+
+        self.t_conv0 = nn.Conv2d(256, 256, 3, padding = 1)
+
+        self.t_conv1 = nn.Conv2d(256, 128, 3, padding = 1)
+        
+        self.t_conv2 = nn.Conv2d(128, 64, 3, padding = 1)
+        
+        self.t_conv3 = nn.Conv2d(64, 32, 3, padding = 1)
+
+        self.t_conv4 = nn.Conv2d(32, 16, 3, padding = 1)
+
+        self.t_conv5 = nn.Conv2d(16, 1, 3, padding = 1)
+        
+
+        self.upsampling = Upsample(scale_factor=2, mode='nearest')
+        # a kernel of 2 and a stride of 2 will increase the spatial dims by 2
+        # self.t_conv1 = nn.ConvTranspose2d(4, 16, 2, stride=2)
+
+        ## PCA layers
+
+        self.pca_encoder = nn.Linear(16384, 1024)
+        self.pca_decoder = nn.Linear(1024, 16384)
+
+        
+    def forward(self, x):
+        ## encode ##
+        x = F.relu(self.conv1(x))
+        x = self.pool(x)
+        x = F.relu(self.conv2(x))
+        x = self.pool(x)
+        x = F.relu(self.conv3(x))
+        x = self.pool(x)
+        x = F.relu(self.conv4(x))
+        x = self.pool(x)
+        x = F.relu(self.conv5(x))
+        x = self.pool(x)
+        # x = F.relu(self.conv6(x))
+        # x = self.pool(x)
+
+
+
+        n, c, px, py = x.size()
+
+        x = x.view(n, -1)
+        x = self.pca_encoder(x)
+        x = self.pca_decoder(x)
+        x = x.view(n, c, px, py)
+       
+        ## decode ##
+        # x = F.relu(self.t_conv7(x))
+        # x = self.upsampling(x)
+        # x = F.relu(self.t_conv6(x))
+        # x = self.upsampling(x)
+        x = F.relu(self.t_conv0(x))
+        x = self.upsampling(x)
+        x = F.relu(self.t_conv1(x))
+        x = self.upsampling(x)
+        x = F.relu(self.t_conv2(x))
+        x = self.upsampling(x)
+        x = F.relu(self.t_conv3(x))
+        x = self.upsampling(x)
+        x = F.relu(self.t_conv4(x))
+        x = self.upsampling(x)
+        x = torch.sigmoid(self.t_conv5(x))
+                
+        return x
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 class Average_CAE_bn(nn.Module):
