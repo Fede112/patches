@@ -1,4 +1,3 @@
-
 import torch
 import torch.optim as optim
 from torch import nn
@@ -10,7 +9,7 @@ from torchvision import transforms
 
 from torchsummary import summary
 
-from torch.utils.data.sampler import SubsetRandomSampler
+from torch.utils.data.sampler import SubsetRandomSampler, SequentialSampler
 
 from models import Average_CAE_deep_PCA
 
@@ -20,12 +19,11 @@ from train import *
 # Dataloader parameters
 batch_size = 64
 validation_split = .2
-shuffle_dataset = True
 random_seed= 42
 # random_seed= 13
 
 # Training parameters
-num_epochs = 150
+num_epochs = 30
 lr = 0.002
 # lr = 0.002
 # number of checkpoints
@@ -35,7 +33,7 @@ checkpoint_freq = 1
 pretrained_weights = True
 freeze_pretrained_weights = True
 # unfreeze_epoch = num_epochs // 2
-unfreeze_epoch = 20
+unfreeze_epoch = 10
 
 
 # Paths
@@ -55,9 +53,15 @@ input_images_path = '/scratch/fbarone/test_256/'
 output_images_path = './output/images'
 activations_path = './output/activations'
 save_checkpoint_path = './output/cae_models'
-load_checkpoint_file = './output/cae_models/20191018-210808_Average_CAE_deep_PCA-1024.pt'
-# load_checkpoint_file = './output/cae_models/20191009-232545_Average_CAE_deep-256x8x8.pt' # general weights
-pca_filepath = 'output/activations/pca-100_coding_Average_CAE_deep-256x8x8.pkl' # load pca weights
+
+# 256x8x8
+load_checkpoint_file = './output/cae_models/20191009-232545_Average_CAE_deep-256x8x8.pt' # general weights
+#1024
+# load_checkpoint_file = './output/cae_models/20191018-210808_Average_CAE_deep_PCA-1024.pt'
+#100
+# load_checkpoint_file = './output/cae_models/20191022-192609_Average_CAE_deep_PCA-100-256x8x8.pt'
+
+# pca_filepath = 'output/activations/pca-100_coding_Average_CAE_deep-256x8x8.pkl' # load pca weights
 
 
 print("----------------------------------------------------------------")
@@ -85,13 +89,18 @@ split = int(np.floor(validation_split * dataset_size))
 print(f'dataset size: {dataset_size}')
 print(f'training size: {dataset_size - split}')
 print(f'validation size: {split} ({validation_split}%)')
+shuffle_dataset = False
 if shuffle_dataset :
     print("shuffling image indices: True")
     np.random.seed(random_seed)
     np.random.shuffle(indices)
-train_indices, val_indices = indices[split:], indices[:split]
+    print(indices[:10])
+else:
+    print(indices[:10])
 
+train_indices, val_indices = indices[split:], indices[:split]
 # Creating PT data samplers and loaders:
+# the sampler is needed to sample from the defined list of indices
 train_sampler = SubsetRandomSampler(train_indices)
 valid_sampler = SubsetRandomSampler(val_indices)
 
@@ -102,6 +111,8 @@ train_loader = DataLoader(patches, batch_size=batch_size, sampler=train_sampler,
                             num_workers=10, pin_memory=True, drop_last=True)
 valid_loader = DataLoader(patches, batch_size=batch_size, sampler=valid_sampler, 
                             num_workers=10, pin_memory=True, drop_last=True)
+# valid_loader = DataLoader(patches, batch_size=batch_size,
+#                             num_workers=10, pin_memory=True, drop_last=True)
 
 print("----------------------------------------------------------------")
 
@@ -110,12 +121,17 @@ print("----------------------------------------------------------------")
 assert torch.has_cudnn == True, 'No cudnn library!'
 
 # set device
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-print(f'device set to device: {device}')
+# device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+device = torch.device("cpu")
+
 
 # initialize the NN model
-# model = Basic_CAE().to(device)
-model = Average_CAE_deep_PCA(100).to(device)
+model_256x8x8 = Average_CAE_deep().to(device)
+# model = Average_CAE_deep_PCA(100).to(device)
+
+# the manual seed needs to be set after the model is initialized so as to have the same seed for the dataloader.
+# the initialization functions change the state of the random seed. Different models change the seed in different ways.
+torch.manual_seed(15)
 
 
 # pretrained weights
@@ -129,17 +145,16 @@ if pretrained_weights:
     model_dict = model.state_dict()
     # load full model pretrained dict
     pretrained_model_dict = torch.load(load_checkpoint_file)['state_dict']
-    pretrained_pca = torch.load(pca_filepath)
+    # pretrained_pca = torch.load(pca_filepath)
 
     # From pytorch discuss: https://discuss.pytorch.org/t/how-to-load-part-of-pre-trained-model/1113/16
     # 1. filter out unnecessary keys
     pretrained_model_dict = {k: v for k, v in pretrained_model_dict.items() if k in model_dict}
-    pretrained_pca = {k: v for k, v in pretrained_pca.items() if k in model_dict}
+    # pretrained_pca = {k: v for k, v in pretrained_pca.items() if k in model_dict}
     
-
     # 2. overwrite entries in the existing state dict
     model_dict.update(pretrained_model_dict) 
-    model_dict.update(pretrained_pca) 
+    # model_dict.update(pretrained_pca) 
     # 3. load the new state dict
     model.load_state_dict(model_dict)
 
@@ -149,99 +164,9 @@ if pretrained_weights:
     print("----------------------------------------------------------------")
 
 
-
-# loss function
-criterion = nn.MSELoss()
-# criterion = nn.BCELoss()
-
-# optimizer algorithm
-# optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum = 0.9)
-optimizer = torch.optim.Adam(model.parameters(), lr=lr)
-# optimizer = torch.optim.RMSprop(model.parameters())
-
-# factor = decaying factor
-scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=10, verbose=True)
-
-# training and validation loss recorder
-loss_hist = []
-
-
-
-print('\n')
-print("----------------------------------------------------------------")
-print("Start training...")
-print(f'num_epochs: {num_epochs} \
-        initial lr: {lr} \
-        batch_size: {batch_size}')
-print("================================================================")
-
-
-
-if freeze_pretrained_weights:
-    print("----------------------------------------------------------------")
-    print("Initially freezed PCA parameters:")
-    for name, param in model.named_parameters():
-        if name in pretrained_pca.keys():
-            # model.param.requires_grad = False
-            print(name)           
-            param.requires_grad = False
-    print("----------------------------------------------------------------")
-        
-# print summary
-# summary(your_model, input_size=(channels, H, W))
-summary(model, input_size=(1, 256, 256), device = 'cuda')
-
-# for name, child in model.named_children():
-#     for child 
-#     if name in pretrained_model_dict.keys():
-#         print(name + ' is frozen')
-#         for param in child.parameters():
-#             param.requires_grad = False
-#     else:
-#         print(name + ' is un frozen')
-#         for param in child.parameters():
-#             print(param.name)
-#             param.requires_grad = True
-
-
-for it, epoch in enumerate(range(num_epochs)):
-
-    # Unfreeze pretrained weights
-    if epoch == unfreeze_epoch:
-        print("Unfreezing the following parameters:")
-        for name, param in model.named_parameters():
-            if name in pretrained_pca.keys() and param.requires_grad == False:
-                print(name)
-                # model.param.requires_grad = False
-                param.requires_grad = True
-        # summary(model, input_size=(1, 256, 256), device = 'cuda')
-
-        
-    # train for one epoch, printing every 10 iterations
-    train_loss = train_one_epoch(model, optimizer, criterion, train_loader, \
-                    device, epoch, print_freq = 2)
-
-
-    # evaluate on the test dataset
-    valid_loss = valid(model, criterion, valid_loader, device, epoch)
-    
-    # keep track of train and valid loss history
-    loss_hist.append((train_loss.val, valid_loss.val))
-
-    # update the learning rate
-    scheduler.step(train_loss.val)
-    print("-----------------")
-
-    # checkpoint
-    if (it + 1) % (num_epochs // checkpoint_freq) == 0:
-        # pass
-        checkpoint = save_checkpoint(epoch, model, optimizer, scheduler, criterion, loss_hist, save_checkpoint_path)
-
-
-
-print("================================================================")
-
-
+# evaluate on the test dataset
+# criterion = nn.MSELoss()
+# valid_loss = valid(model, criterion, valid_loader, device, 10)
 
 # Plot results
 # obtain one batch of test images
@@ -250,6 +175,10 @@ dataiter = iter(valid_loader)
 images, labels = dataiter.next()
 images = images[:num_patches]
 len(images)
+
+
+
+
 # get sample outputs
 model.eval()
 output = model(images.to(device=device))
@@ -274,22 +203,12 @@ for images, row in zip([images, output], axes):
         ax.get_xaxis().set_visible(False)
         ax.get_yaxis().set_visible(False)
 
-# Training history
-fig_hist = plt.figure()
-ax = fig_hist.add_subplot(1,1,1)
-# unzip list of tuples
-train_loss, valid_loss = zip(*loss_hist)
-ax.plot(range(len(loss_hist)), train_loss, label = 'training loss')
-ax.plot(range(len(loss_hist)), valid_loss, label = 'validation loss')
-ax.set_xlabel('epoch')
-ax.set_ylabel('Loss')
-ax.legend()
-# plt.show()
+plt.show()
 
 
-# output figures
+# # output figures
 
-fig_path = os.path.join( output_images_path, checkpoint['name'][:-3] + '.png' )
-fig_hist_path = os.path.join( output_images_path ,checkpoint['name'][:-3] + '_hist.png')
-fig.savefig(fig_path, bbox_inches='tight')
-fig_hist.savefig(fig_hist_path, bbox_inches='tight')
+# fig_path = os.path.join( output_images_path, checkpoint['name'][:-3] + '.png' )
+# fig_hist_path = os.path.join( output_images_path ,checkpoint['name'][:-3] + '_hist.png')
+# fig.savefig(fig_path, bbox_inches='tight')
+# fig_hist.savefig(fig_hist_path, bbox_inches='tight')

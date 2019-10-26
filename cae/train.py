@@ -88,7 +88,7 @@ def train_one_epoch_DCAE(model, optimizer, criterion, train_loader, device, epoc
 
 
     # batch forward pass
-    for i_batch, data in tqdm(enumerate(train_loader)):
+    for i_batch, data in enumerate(train_loader):
         # _ should be the target, which for cae its the image itself        
         images, _ = data[0].to(device), data[1]
         # clear the gradients of all optimized variables

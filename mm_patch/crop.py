@@ -130,7 +130,7 @@ class Crop():
 
 if __name__ == '__main__':
 
-    img = imageio.imread('../dicom_CRO_23072019/sample_data/images_single/1111248_L_CC.png')
+    img = imageio.imread('/scratch/fbarone/dicom_CRO_23072019/sample_data/images/97800_L_CC.png')
     plt.imshow(img)
     plt.show()
     # img = crop_img_from_largest_connected(img)

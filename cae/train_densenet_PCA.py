@@ -1,4 +1,3 @@
-
 import torch
 import torch.optim as optim
 from torch import nn
@@ -12,10 +11,22 @@ from torchsummary import summary
 
 from torch.utils.data.sampler import SubsetRandomSampler
 
-from models import Average_CAE_deep_PCA
+from models import DenseNet_CAE_PCA
 
 
 from train import *
+
+import models
+from utils import ExpoAverageMeter
+from utils import read_image_png
+from models import DenseNet_CAE_gen
+from train import train_one_epoch_DCAE
+from train import valid_DCAE
+
+sys.path.insert(0,'/u/f/fbarone/Documents/patches/')
+
+import mm_patch.transforms 
+from mm_patch.utils import image_from_index
 
 # Dataloader parameters
 batch_size = 64
@@ -25,8 +36,8 @@ random_seed= 42
 # random_seed= 13
 
 # Training parameters
-num_epochs = 150
-lr = 0.002
+num_epochs = 30
+lr = 0.0002
 # lr = 0.002
 # number of checkpoints
 checkpoint_freq = 1
@@ -35,7 +46,7 @@ checkpoint_freq = 1
 pretrained_weights = True
 freeze_pretrained_weights = True
 # unfreeze_epoch = num_epochs // 2
-unfreeze_epoch = 20
+unfreeze_epoch = 5
 
 
 # Paths
@@ -55,9 +66,12 @@ input_images_path = '/scratch/fbarone/test_256/'
 output_images_path = './output/images'
 activations_path = './output/activations'
 save_checkpoint_path = './output/cae_models'
-load_checkpoint_file = './output/cae_models/20191018-210808_Average_CAE_deep_PCA-1024.pt'
+
+
+pretrained_densenet_filepath = '/u/f/fbarone/Documents/breast_cancer_classifier/models/sample_patch_model.p'
 # load_checkpoint_file = './output/cae_models/20191009-232545_Average_CAE_deep-256x8x8.pt' # general weights
-pca_filepath = 'output/activations/pca-100_coding_Average_CAE_deep-256x8x8.pkl' # load pca weights
+pretrained_decoder_filepath = './output/cae_models/20191018-210808_Average_CAE_deep_PCA-1024.pt' # load pca weights
+pca_filepath = 'output/activations/pca-1024_coding_Average_CAE_deep-256x8x8.pkl' # load pca weights
 
 
 print("----------------------------------------------------------------")
@@ -68,10 +82,14 @@ print("Dataset and Dataloaders: \n")
 composed = transforms.Compose([ 
 #                                 mm_patch.transforms.ToImage(),
                                 transforms.ToTensor(),
-                                mm_patch.transforms.Scale()
-#                                 mm_patch.transforms.GrayToRGB(),
-#                                 transforms.Normalize(mean=[18820.3496], std=[8547.6963])
+                                mm_patch.transforms.Scale(),
+                                mm_patch.transforms.GrayToRGB(),
+                                # Norm does (image - mean) / std
+                                # transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225])
+                                transforms.Normalize(mean=[0.485, 0.485, 0.485], std=[0.229, 0.229, 0.229])
+                                # true (mean,std) of patches : (0.3373, 0.1767)
                             ])
+
 
 # Dataset
 # patches = datasets.ImageFolder('/scratch/fbarone/test_256/', transform = composed, target_transform=None, loader=read_image_png)
@@ -103,6 +121,11 @@ train_loader = DataLoader(patches, batch_size=batch_size, sampler=train_sampler,
 valid_loader = DataLoader(patches, batch_size=batch_size, sampler=valid_sampler, 
                             num_workers=10, pin_memory=True, drop_last=True)
 
+# images = next(iter(train_loader))
+# img = images[0][0,0,:,:]
+# print(np.amin(np.array(img)))
+# print(images[0][0,0,:,:].shape)
+
 print("----------------------------------------------------------------")
 
 
@@ -111,12 +134,13 @@ assert torch.has_cudnn == True, 'No cudnn library!'
 
 # set device
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-print(f'device set to device: {device}')
 
-# initialize the NN model
-# model = Basic_CAE().to(device)
-model = Average_CAE_deep_PCA(100).to(device)
+print(f'device set to: {device}')
 
+# Initialize the NN model
+# Build DenseNet_CAE model
+dense_param = {'num_classes': 4}
+model = DenseNet_CAE_PCA(dense_param).to(device)
 
 # pretrained weights
 pretrained_model_dict = {}
@@ -124,24 +148,30 @@ if pretrained_weights:
     print("----------------------------------------------------------------")
     print("Loading pretrained weights... ", end='')
 
+
+    ## Load Densenet model
+    model.densenet121.load_from_path(pretrained_densenet_filepath)
+
+    ## Load Decoder from Average_CAE_deep_PCA
     ## Load subset of pretrained model
     # sub_model keys
-    model_dict = model.state_dict()
+    decoder_dict = model.decoder.state_dict()
     # load full model pretrained dict
-    pretrained_model_dict = torch.load(load_checkpoint_file)['state_dict']
+    pretrained_decoder_dict = torch.load(pretrained_decoder_filepath)['state_dict']
     pretrained_pca = torch.load(pca_filepath)
+
 
     # From pytorch discuss: https://discuss.pytorch.org/t/how-to-load-part-of-pre-trained-model/1113/16
     # 1. filter out unnecessary keys
-    pretrained_model_dict = {k: v for k, v in pretrained_model_dict.items() if k in model_dict}
-    pretrained_pca = {k: v for k, v in pretrained_pca.items() if k in model_dict}
-    
+    pretrained_decoder_dict = {k: v for k, v in pretrained_decoder_dict.items() if k in decoder_dict}
+    pretrained_pca = {k: v for k, v in pretrained_pca.items() if k in decoder_dict}
+
 
     # 2. overwrite entries in the existing state dict
-    model_dict.update(pretrained_model_dict) 
-    model_dict.update(pretrained_pca) 
+    decoder_dict.update(pretrained_decoder_dict) 
+    decoder_dict.update(pretrained_pca) 
     # 3. load the new state dict
-    model.load_state_dict(model_dict)
+    # model.decoder.load_state_dict(decoder_dict)
 
 
     print("Done!")
@@ -155,7 +185,7 @@ criterion = nn.MSELoss()
 # criterion = nn.BCELoss()
 
 # optimizer algorithm
-# optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum = 0.9)
+# optimizer = torch.optim.SGD(model.parameters(), lr=lr)
 optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 # optimizer = torch.optim.RMSprop(model.parameters())
 
@@ -179,17 +209,20 @@ print("================================================================")
 
 if freeze_pretrained_weights:
     print("----------------------------------------------------------------")
-    print("Initially freezed PCA parameters:")
-    for name, param in model.named_parameters():
-        if name in pretrained_pca.keys():
-            # model.param.requires_grad = False
-            print(name)           
-            param.requires_grad = False
+    print("Initially freezed Densenet parameters:")
+    # freeze densenet121 layer
+    for name, param in model.densenet121.named_parameters():
+        param.requires_grad = False
+
+    # freeze pca linear layer of decoder
+    # for name,param in model.decoder.pca_decoder.named_parameters():
+    #     print(name)
+    #     param.requires_grad = False        
     print("----------------------------------------------------------------")
         
 # print summary
 # summary(your_model, input_size=(channels, H, W))
-summary(model, input_size=(1, 256, 256), device = 'cuda')
+summary(model, input_size=(3, 256, 256), device = 'cuda')
 
 # for name, child in model.named_children():
 #     for child 
@@ -207,23 +240,30 @@ summary(model, input_size=(1, 256, 256), device = 'cuda')
 for it, epoch in enumerate(range(num_epochs)):
 
     # Unfreeze pretrained weights
-    if epoch == unfreeze_epoch:
+    if epoch == unfreeze_epoch and freeze_pretrained_weights:
         print("Unfreezing the following parameters:")
-        for name, param in model.named_parameters():
-            if name in pretrained_pca.keys() and param.requires_grad == False:
-                print(name)
-                # model.param.requires_grad = False
-                param.requires_grad = True
-        # summary(model, input_size=(1, 256, 256), device = 'cuda')
+        # Densenet121
+        # for name, param in model.densenet121.named_parameters():
+        #     param.requires_grad = True
+        #     # model.param.requires_grad = False
+        #     print(name)           
+    
+        # linear layer of CAE-PCA decoder
+        # for name,param in model.decoder.pca_decoder.named_parameters():
+        #     print(name)
+        #     param.requires_grad = True        
+    
+
+        # summary(model, input_size=(3, 256, 256), device = 'cuda')
 
         
     # train for one epoch, printing every 10 iterations
-    train_loss = train_one_epoch(model, optimizer, criterion, train_loader, \
+    train_loss = train_one_epoch_DCAE(model, optimizer, criterion, train_loader, \
                     device, epoch, print_freq = 2)
 
 
     # evaluate on the test dataset
-    valid_loss = valid(model, criterion, valid_loader, device, epoch)
+    valid_loss = valid_DCAE(model, criterion, valid_loader, device, epoch)
     
     # keep track of train and valid loss history
     loss_hist.append((train_loss.val, valid_loss.val))
@@ -241,8 +281,6 @@ for it, epoch in enumerate(range(num_epochs)):
 
 print("================================================================")
 
-
-
 # Plot results
 # obtain one batch of test images
 num_patches = 10
@@ -251,11 +289,10 @@ images, labels = dataiter.next()
 images = images[:num_patches]
 len(images)
 # get sample outputs
-model.eval()
 output = model(images.to(device=device))
-
 # prep images for display
 images = images.cpu().numpy()
+images = images[:,0,:,:][:,None,:,:]
 
 # output is resized into a batch of images
 print(len(output))

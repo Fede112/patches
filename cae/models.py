@@ -7,35 +7,6 @@ from torch.nn.functional import pad
 
 import torchvision.models.densenet as densenet
 
-
-# DenseNet_CAE
-class DenseNet_CAE(nn.Module):
-    def __init__(self, dense_param, gen_param):
-        super().__init__()
-
-        if isinstance(gen_param, (dict)):
-            self.gen_param = gen_param
-        else:
-            raise TypeError('gen_param must be a dictionary \
-                            matching Generator constructor')
-        if isinstance(dense_param, (dict)):
-            self.dense_param = dense_param
-        else:
-            raise TypeError('dense_param must be a dictionary \
-                            matching ModifiedDenseNet121 constructor')
-
-        self.densenet121 = ModifiedDenseNet121(**dense_param)
-        self.generator = Generator256(**gen_param)
-
-    def forward(self, x):
-        x = self.densenet121(x)
-        x = x[:,:, None, None]
-        x = self.generator(x)
-        return x
-
-
-
-
 # define the NN architecture
 class Basic_CAE(nn.Module):
     def __init__(self):
@@ -243,6 +214,7 @@ class Average_CAE_deep(nn.Module):
                 
         return x
 
+
 # Auxilary for Generator256
 # self.iter_example = Interpolate(size=(2, 2), mode='bilinear')
 class Upsample(nn.Module):
@@ -265,7 +237,7 @@ class Upsample(nn.Module):
 
 
 class Average_CAE_deep_PCA(nn.Module):
-    def __init__(self):
+    def __init__(self, coding_size):
         super().__init__()
         
         ## encoder layers ##
@@ -310,8 +282,8 @@ class Average_CAE_deep_PCA(nn.Module):
 
         ## PCA layers
 
-        self.pca_encoder = nn.Linear(16384, 1024)
-        self.pca_decoder = nn.Linear(1024, 16384)
+        self.pca_encoder = nn.Linear(16384, coding_size)
+        self.pca_decoder = nn.Linear(coding_size, 16384)
 
         
     def forward(self, x):
@@ -356,22 +328,6 @@ class Average_CAE_deep_PCA(nn.Module):
         x = torch.sigmoid(self.t_conv5(x))
                 
         return x
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 class Average_CAE_bn(nn.Module):
     def __init__(self):
@@ -471,6 +427,118 @@ class Average_CAE_bn(nn.Module):
         x = self.decoder(x)
         x = torch.sigmoid(x)
         # x = 3*x # for nn.Tanh()
+        return x
+
+
+
+
+# ==============================================================================
+# Densenet encoders with different decoders
+#
+# What follows is a combination of densenet encoder plus different decoders.
+# The resulting architecture is an asymmetric autoencoder.
+# ==============================================================================
+
+
+# DENSENET ENCODER
+
+# DenseNet encoder + GANs generator decoder
+# The generator is based on GANs examples, but modified to fit our purpose
+class DenseNet_CAE_gen(nn.Module):
+    def __init__(self, dense_param, gen_param):
+        super().__init__()
+
+        if isinstance(gen_param, (dict)):
+            self.gen_param = gen_param
+        else:
+            raise TypeError('gen_param must be a dictionary \
+                            matching Generator constructor')
+        if isinstance(dense_param, (dict)):
+            self.dense_param = dense_param
+        else:
+            raise TypeError('dense_param must be a dictionary \
+                            matching ModifiedDenseNet121 constructor')
+
+        self.densenet121 = ModifiedDenseNet121(**dense_param)
+        self.generator = Generator256(**gen_param)
+
+    def forward(self, x):
+        x = self.densenet121(x)
+        x = x[:,:, None, None]
+        x = self.generator(x)
+        return x
+
+
+# DenseNet encoder + Average_CAE_deep_PCA decoder
+class DenseNet_CAE_PCA(nn.Module):
+    def __init__(self, dense_param):
+        super().__init__()
+
+        if isinstance(dense_param, (dict)):
+            self.dense_param = dense_param
+        else:
+            raise TypeError('dense_param must be a dictionary \
+                            matching ModifiedDenseNet121 constructor')
+
+        self.densenet121 = ModifiedDenseNet121(**dense_param)
+        self.decoder = PCA_CAE_decoder()
+
+    def forward(self, x):
+        # maxval = torch.max(x[0,0,:,:])
+        # minval = torch.min(x[0,0,:,:])
+        # print(f'input maxval:{maxval}')
+        # print(f'input minval:{minval}')
+
+        x = self.densenet121(x)
+        # x = x[:,:, None, None]
+        x = self.decoder(x)
+
+        # maxval = torch.max(x[0,0,:,:])
+        # minval = torch.min(x[0,0,:,:])
+        # print(f'output maxval:{maxval}')
+        # print(f'output minval:{minval}')
+        return x
+
+
+
+class PCA_CAE_decoder(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+        self.t_conv0 = nn.Conv2d(256, 256, 3, padding = 1)
+        self.t_conv1 = nn.Conv2d(256, 128, 3, padding = 1)
+        self.t_conv2 = nn.Conv2d(128, 64, 3, padding = 1)
+        self.t_conv3 = nn.Conv2d(64, 32, 3, padding = 1)
+        self.t_conv4 = nn.Conv2d(32, 16, 3, padding = 1)
+        self.t_conv5 = nn.Conv2d(16, 1, 3, padding = 1)
+
+        self.pca_decoder = nn.Linear(1024, 16384)
+        # self.out = nn.Tanh()
+
+        self.upsampling = Upsample(scale_factor=2, mode='nearest')
+
+
+    def forward(self,x):
+        x = self.pca_decoder(x)
+        x = x.view(-1, 256, 8, 8)
+       
+        ## decode ##
+        # x = F.relu(self.t_conv7(x))
+        # x = self.upsampling(x)
+        # x = F.relu(self.t_conv6(x))
+        # x = self.upsampling(x)
+        x = F.relu(self.t_conv0(x))
+        x = self.upsampling(x)
+        x = F.relu(self.t_conv1(x))
+        x = self.upsampling(x)
+        x = F.relu(self.t_conv2(x))
+        x = self.upsampling(x)
+        x = F.relu(self.t_conv3(x))
+        x = self.upsampling(x)
+        x = F.relu(self.t_conv4(x))
+        x = self.upsampling(x)
+        x = torch.sigmoid(self.t_conv5(x))
+
         return x
 
 

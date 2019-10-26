@@ -21,7 +21,7 @@ import models
 from utils import ExpoAverageMeter
 from utils import read_image_png
 from models import Basic_CAE
-from models import DenseNet_CAE
+from models import DenseNet_CAE_gen
 from train import train_one_epoch_DCAE
 from train import valid_DCAE
 
@@ -107,7 +107,7 @@ device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 # Build DenseNet_CAE model
 dense_param = {'num_classes': 4}
 gen_param = {'nc': 1, 'nz': 1024, 'ngf': 256, 'ngpu': 1}
-model = DenseNet_CAE(dense_param, gen_param).to(device)
+model = DenseNet_CAE_gen(dense_param, gen_param).to(device)
 
 ## Load subset of pretrained model
 model_path = '/u/f/fbarone/Documents/breast_cancer_classifier/models/sample_patch_model.p'
