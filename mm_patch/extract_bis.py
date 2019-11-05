@@ -1,3 +1,14 @@
+# ==============================================================================
+# This module is meant for gathering utilities to extract features from images.
+# It is based on `sklearn.feature_extraction.image` with License: BSD 3 clause.
+#
+# The difference is in 'extract_patches_2d' where we added flexibility to the
+# extraction of patches by making the stride in both (x,y) directions an argument
+# of the function.
+# ==============================================================================
+
+
+
 """
 The :mod:`sklearn.feature_extraction.image` submodule gathers utilities to
 extract features from images.

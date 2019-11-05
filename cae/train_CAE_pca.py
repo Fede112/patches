@@ -35,7 +35,7 @@ checkpoint_freq = 1
 pretrained_weights = True
 freeze_pretrained_weights = True
 # unfreeze_epoch = num_epochs // 2
-unfreeze_epoch = 20
+unfreeze_epoch = 10
 
 
 # Paths
@@ -57,7 +57,7 @@ activations_path = './output/activations'
 save_checkpoint_path = './output/cae_models'
 load_checkpoint_file = './output/cae_models/20191018-210808_Average_CAE_deep_PCA-1024.pt'
 # load_checkpoint_file = './output/cae_models/20191009-232545_Average_CAE_deep-256x8x8.pt' # general weights
-pca_filepath = 'output/activations/pca-100_coding_Average_CAE_deep-256x8x8.pkl' # load pca weights
+pca_filepath = 'output/activations/pca-1024_coding_Average_CAE_deep-256x8x8.pkl' # load pca weights
 
 
 print("----------------------------------------------------------------")
@@ -89,6 +89,8 @@ if shuffle_dataset :
     print("shuffling image indices: True")
     np.random.seed(random_seed)
     np.random.shuffle(indices)
+    print(indices[:10])
+
 train_indices, val_indices = indices[split:], indices[:split]
 
 # Creating PT data samplers and loaders:
@@ -111,11 +113,11 @@ assert torch.has_cudnn == True, 'No cudnn library!'
 
 # set device
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-print(f'device set to device: {device}')
+print(f'device set to: {device}')
 
 # initialize the NN model
 # model = Basic_CAE().to(device)
-model = Average_CAE_deep_PCA(100).to(device)
+model = Average_CAE_deep_PCA(1024).to(device)
 
 
 # pretrained weights
@@ -155,8 +157,8 @@ criterion = nn.MSELoss()
 # criterion = nn.BCELoss()
 
 # optimizer algorithm
-# optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum = 0.9)
-optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum = 0.9)
+# optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 # optimizer = torch.optim.RMSprop(model.parameters())
 
 # factor = decaying factor

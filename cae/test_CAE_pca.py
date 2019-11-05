@@ -12,6 +12,8 @@ from torchsummary import summary
 from torch.utils.data.sampler import SubsetRandomSampler, SequentialSampler
 
 from models import Average_CAE_deep_PCA
+from models import Upsample
+from utils import get_activation
 
 
 from train import *
@@ -35,6 +37,10 @@ freeze_pretrained_weights = True
 # unfreeze_epoch = num_epochs // 2
 unfreeze_epoch = 10
 
+# hooks
+encoder_hooks = False
+decoder_hooks = True
+
 
 # Paths
 # dell
@@ -55,9 +61,9 @@ activations_path = './output/activations'
 save_checkpoint_path = './output/cae_models'
 
 # 256x8x8
-load_checkpoint_file = './output/cae_models/20191009-232545_Average_CAE_deep-256x8x8.pt' # general weights
+# load_checkpoint_file = './output/cae_models/20191009-232545_Average_CAE_deep-256x8x8.pt' # general weights
 #1024
-# load_checkpoint_file = './output/cae_models/20191018-210808_Average_CAE_deep_PCA-1024.pt'
+load_checkpoint_file = './output/cae_models/20191018-210808_Average_CAE_deep_PCA-1024.pt'
 #100
 # load_checkpoint_file = './output/cae_models/20191022-192609_Average_CAE_deep_PCA-100-256x8x8.pt'
 
@@ -87,8 +93,10 @@ dataset_size = len(patches)
 indices = list(range(dataset_size))
 split = int(np.floor(validation_split * dataset_size))
 print(f'dataset size: {dataset_size}')
-print(f'training size: {dataset_size - split}')
-print(f'validation size: {split} ({validation_split}%)')
+train_size = dataset_size - split
+valid_size = split
+print(f'training size: {train_size}')
+print(f'validation size: {valid_size} ({validation_split}%)')
 shuffle_dataset = False
 if shuffle_dataset :
     print("shuffling image indices: True")
@@ -110,7 +118,7 @@ valid_sampler = SubsetRandomSampler(val_indices)
 train_loader = DataLoader(patches, batch_size=batch_size, sampler=train_sampler, 
                             num_workers=10, pin_memory=True, drop_last=True)
 valid_loader = DataLoader(patches, batch_size=batch_size, sampler=valid_sampler, 
-                            num_workers=10, pin_memory=True, drop_last=True)
+                            num_workers=0, pin_memory=True, drop_last=True)
 # valid_loader = DataLoader(patches, batch_size=batch_size,
 #                             num_workers=10, pin_memory=True, drop_last=True)
 
@@ -126,8 +134,11 @@ device = torch.device("cpu")
 
 
 # initialize the NN model
-model_256x8x8 = Average_CAE_deep().to(device)
+model_1024 = Average_CAE_deep_PCA(1024).to(device)
 # model = Average_CAE_deep_PCA(100).to(device)
+
+summary(model_1024, input_size=(1, 256, 256), device = 'cpu')
+
 
 # the manual seed needs to be set after the model is initialized so as to have the same seed for the dataloader.
 # the initialization functions change the state of the random seed. Different models change the seed in different ways.
@@ -142,7 +153,7 @@ if pretrained_weights:
 
     ## Load subset of pretrained model
     # sub_model keys
-    model_dict = model.state_dict()
+    model_dict = model_1024.state_dict()
     # load full model pretrained dict
     pretrained_model_dict = torch.load(load_checkpoint_file)['state_dict']
     # pretrained_pca = torch.load(pca_filepath)
@@ -156,7 +167,7 @@ if pretrained_weights:
     model_dict.update(pretrained_model_dict) 
     # model_dict.update(pretrained_pca) 
     # 3. load the new state dict
-    model.load_state_dict(model_dict)
+    model_1024.load_state_dict(model_dict)
 
 
     print("Done!")
@@ -164,46 +175,95 @@ if pretrained_weights:
     print("----------------------------------------------------------------")
 
 
+
+if encoder_hooks:
+    # Register hook
+    activations = {'enc_1': [], 'enc_2': [], 'enc_3': [], 'enc_4': [], 'enc_5': []}
+    handle_enc_1 = model_1024.conv1.register_forward_hook(get_activation(activations, 'enc_1'))
+    handle_enc_2 = model_1024.conv2.register_forward_hook(get_activation(activations, 'enc_2'))
+    handle_enc_3 = model_1024.conv3.register_forward_hook(get_activation(activations, 'enc_3'))
+    handle_enc_4 = model_1024.conv4.register_forward_hook(get_activation(activations, 'enc_4'))
+    handle_enc_5 = model_1024.conv5.register_forward_hook(get_activation(activations, 'enc_5'))
+
+
+if decoder_hooks:
+    # Register hook
+    activations = {'pca': [], 'dec_1': [], 'dec_2': [], 'dec_3': [], 'dec_4': [], 'dec_5': []}
+    handle_pca = model_1024.pca_encoder.register_forward_hook(get_activation(activations, 'pca'))
+    handle_dec_1 = model_1024.t_conv0.register_forward_hook(get_activation(activations, 'dec_1'))
+    handle_dec_2 = model_1024.t_conv1.register_forward_hook(get_activation(activations, 'dec_2'))
+    handle_dec_3 = model_1024.t_conv2.register_forward_hook(get_activation(activations, 'dec_3'))
+    handle_dec_4 = model_1024.t_conv3.register_forward_hook(get_activation(activations, 'dec_4'))
+    handle_dec_5 = model_1024.t_conv4.register_forward_hook(get_activation(activations, 'dec_5'))
+
+
 # evaluate on the test dataset
 # criterion = nn.MSELoss()
 # valid_loss = valid(model, criterion, valid_loader, device, 10)
 
-# Plot results
-# obtain one batch of test images
-num_patches = 10
-dataiter = iter(valid_loader)
-images, labels = dataiter.next()
-images = images[:num_patches]
-len(images)
-
-
 
 
 # get sample outputs
-model.eval()
-output = model(images.to(device=device))
+model_1024.eval()
+# output = model(images.to(device=device))
 
-# prep images for display
-images = images.cpu().numpy()
+# for encoder
+maxpool = nn.MaxPool2d(2, 2)
+# for decoder
+upsampling = Upsample(scale_factor=2, mode='nearest')
 
-# output is resized into a batch of images
-print(len(output))
-print(output[0].shape)
-output = output.view(num_patches, 1, 256, 256)
-# use detach when it's an output that requires_grad
-output = output.detach().cpu().numpy()
 
-# plot the first ten input images and then reconstructed images
-fig, axes = plt.subplots(nrows=2, ncols=10, sharex=True, sharey=True, figsize=(25,4))
+with torch.no_grad():
+    output = [model_1024(batch[0].to(device=device)) for batch in tqdm(valid_loader)]
 
-# input images on top row, reconstructions on bottom
-for images, row in zip([images, output], axes):
-    for img, ax in zip(images, row):
-        ax.imshow(np.squeeze(img), cmap='gray')
-        ax.get_xaxis().set_visible(False)
-        ax.get_yaxis().set_visible(False)
 
-plt.show()
+
+# activations_path = '/scratch/fbarone/activations_CAE_PCA-1024'
+activations_path = './activations'
+for name, outputs in activations.items():
+    if outputs:
+        file_path = os.path.join(activations_path ,name + '.pkl')
+        with open(file_path,'wb') as file: 
+            if encoder_hooks:
+                outputs = maxpool(torch.cat(outputs, 0)).view(valid_size,-1).numpy()
+            if decoder_hooks:
+                print(name)
+                outputs = torch.cat(outputs, 0).view(valid_size,-1).numpy()
+            print(outputs.shape)
+            np.save(file, outputs)
+
+
+
+# Plot results
+# # obtain one batch of test images
+# num_patches = 10
+# dataiter = iter(valid_loader)
+# images, labels = dataiter.next()
+# images = images[:num_patches]
+# len(images)
+
+
+# # prep images for display
+# images = images.cpu().numpy()
+
+# # output is resized into a batch of images
+# print(len(output))
+# print(output[0].shape)
+# output = output.view(num_patches, 1, 256, 256)
+# # use detach when it's an output that requires_grad
+# output = output.detach().cpu().numpy()
+
+# # plot the first ten input images and then reconstructed images
+# fig, axes = plt.subplots(nrows=2, ncols=10, sharex=True, sharey=True, figsize=(25,4))
+
+# # input images on top row, reconstructions on bottom
+# for images, row in zip([images, output], axes):
+#     for img, ax in zip(images, row):
+#         ax.imshow(np.squeeze(img), cmap='gray')
+#         ax.get_xaxis().set_visible(False)
+#         ax.get_yaxis().set_visible(False)
+
+# plt.show()
 
 
 # # output figures

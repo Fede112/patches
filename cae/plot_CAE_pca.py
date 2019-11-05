@@ -83,7 +83,7 @@ split = int(np.floor(validation_split * dataset_size))
 print(f'dataset size: {dataset_size}')
 print(f'training size: {dataset_size - split}')
 print(f'validation size: {split} ({validation_split}%)')
-shuffle_dataset = False
+shuffle_dataset = True
 if shuffle_dataset :
     print("shuffling image indices: True")
     np.random.seed(random_seed)
@@ -124,6 +124,9 @@ print(f'device: {device}')
 model_256x8x8 = Average_CAE_deep().to(device)
 model_1024 = Average_CAE_deep_PCA(1024).to(device)
 model_100 = Average_CAE_deep_PCA(100).to(device)
+
+summary(model_1024, input_size=(1, 256, 256), device = 'cpu')
+
 
 # the manual seed needs to be set after the model is initialized so as to have the same seed for the dataloader.
 # the initialization functions change the state of the random seed. Different models change the seed in different ways.
