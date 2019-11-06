@@ -162,7 +162,7 @@ if pretrained_weights:
     # 1. filter out unnecessary keys
     pretrained_model_dict = {k: v for k, v in pretrained_model_dict.items() if k in model_dict}
     # pretrained_pca = {k: v for k, v in pretrained_pca.items() if k in model_dict}
-    
+
     # 2. overwrite entries in the existing state dict
     model_dict.update(pretrained_model_dict) 
     # model_dict.update(pretrained_pca) 

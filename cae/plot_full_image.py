@@ -19,6 +19,10 @@ import mm_patch.transforms
 
 
 img = imageio.imread('/scratch/fbarone/dicom_CRO_23072019/sample_data/images/97800_L_CC.png')
+
+# img = imageio.imread('/u/f/fbarone/Desktop/mercury.png')
+# img = img[:,:,0]
+# print(img.shape)
 # plt.imshow(img)
 # plt.show()
 
@@ -31,6 +35,7 @@ def scale_img(img, min_range = 0, max_range = 1):
 
 
 trans_ls = [crop_img_from_largest_connected, scale_img]
+# trans_ls = [ scale_img]
 crop_trans = Crop(trans_ls)
 trans_img = crop_trans(img)
 # plt.imshow(trans_img)
@@ -40,8 +45,8 @@ print(trans_img.shape)
 
 px = 256
 py = 256
-num_prow = (trans_img.shape[0] // 256)
-num_pcol = (trans_img.shape[1] // 256)
+num_prow = (trans_img.shape[0] // 256) #+ 1
+num_pcol = (trans_img.shape[1] // 256) #+ 1
 
 output_img_256x8x8 = np.zeros(trans_img.shape)
 output_img_1024 = np.zeros(trans_img.shape)
