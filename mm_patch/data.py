@@ -49,7 +49,7 @@ class PatchesPd():
             raise TypeError("input_path must be a string.")
         if not isinstance(label,str):
             raise TypeError("label must be a string.")
-        
+
         self.input_path = input_path
         self.label = label
         self.patch_size = patch_size
@@ -57,8 +57,7 @@ class PatchesPd():
         self.max_patches = max_patches
         self.seed = seed
         
-        full_image_ls = _listdir_fullpath(input_path)[:14]
-        print(full_image_ls)
+        full_image_ls = _listdir_fullpath(input_path)
         
         patches_ls = []
         for path in full_image_ls:
@@ -121,6 +120,14 @@ class Patches():
         # if not isinstance(label,str):
             # raise TypeError("label must be a string.")
         
+
+        if os.path.exists(output_path):
+            # Prevent overwriting to an existing directory
+            raise IOError(f"The directory '{output_path}' to save the patches already exists.")
+        else:
+            os.makedirs(output_path)
+        
+
         self.input_path = input_path
         self.output_path = output_path
         self.label = os.path.basename(output_path)
@@ -131,7 +138,7 @@ class Patches():
         
         # full_image_ls = input_path
         full_image_ls = _listdir_fullpath(input_path)
-        full_image_ls = full_image_ls
+        full_image_ls = full_image_ls[:10]
         
         import matplotlib.pyplot as plt
         counter = 0
