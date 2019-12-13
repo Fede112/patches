@@ -151,12 +151,11 @@ class Average_CAE_deep(nn.Module):
 
         self.pool = nn.MaxPool2d(2, 2)
         
-       ## decoder layers ##
-     
+       ## decoder layers ##  
         
-        self.t_conv7 = nn.Conv2d(512, 512, 3, padding = 1)
+        # self.t_conv7 = nn.Conv2d(512, 512, 3, padding = 1)
 
-        self.t_conv6 = nn.Conv2d(512, 256, 3, padding = 1)
+        # self.t_conv6 = nn.Conv2d(512, 256, 3, padding = 1)
 
 
         self.t_conv0 = nn.Conv2d(256, 256, 3, padding = 1)
@@ -195,23 +194,49 @@ class Average_CAE_deep(nn.Module):
         # x = self.pool(x)
 
        
-        ## decode ##
+        ############################################
+        ## Asymmetric decoder ##
+        # # x = F.relu(self.t_conv7(x))
+        # # x = self.upsampling(x)
+        # # x = F.relu(self.t_conv6(x))
+        # # x = self.upsampling(x)
+       
+
+        # x = F.relu(self.t_conv0(x))
+        # x = self.upsampling(x)
+        # x = F.relu(self.t_conv1(x))
+        # x = self.upsampling(x)
+        # x = F.relu(self.t_conv2(x))
+        # x = self.upsampling(x)
+        # x = F.relu(self.t_conv3(x))
+        # x = self.upsampling(x)
+        # x = F.relu(self.t_conv4(x))
+        # x = self.upsampling(x)
+        # x = torch.sigmoid(self.t_conv5(x))
+        
+
+        #############################################
+        ## Symmetric decoder ##
+
         # x = F.relu(self.t_conv7(x))
         # x = self.upsampling(x)
         # x = F.relu(self.t_conv6(x))
         # x = self.upsampling(x)
-        x = F.relu(self.t_conv0(x))
-        x = self.upsampling(x)
-        x = F.relu(self.t_conv1(x))
-        x = self.upsampling(x)
-        x = F.relu(self.t_conv2(x))
-        x = self.upsampling(x)
-        x = F.relu(self.t_conv3(x))
-        x = self.upsampling(x)
-        x = F.relu(self.t_conv4(x))
-        x = self.upsampling(x)
-        x = torch.sigmoid(self.t_conv5(x))
-                
+        # x = F.relu(self.t_conv0(x))
+        # x = self.upsampling(x)
+        # x = F.relu(self.t_conv1(x))
+        # x = self.upsampling(x)
+        # x = F.relu(self.t_conv2(x))
+        # x = self.upsampling(x)
+        # x = F.relu(self.t_conv3(x))
+        # x = self.upsampling(x)
+        # x = F.relu(self.t_conv4(x))
+        # x = self.upsampling(x)
+        # x = self.t_conv5(x)
+        # x = self.upsampling(x)
+        # x = torch.sigmoid(x)
+        
+
         return x
 
 
@@ -307,25 +332,25 @@ class Average_CAE_deep_PCA(nn.Module):
 
         x = x.view(n, -1)
         x = self.pca_encoder(x)
-        x = self.pca_decoder(x)
-        x = x.view(n, c, px, py)
+        # x = self.pca_decoder(x)
+        # x = x.view(n, c, px, py)
        
-        ## decode ##
-        # x = F.relu(self.t_conv7(x))
+        # ## decode ##
+        # # x = F.relu(self.t_conv7(x))
+        # # x = self.upsampling(x)
+        # # x = F.relu(self.t_conv6(x))
+        # # x = self.upsampling(x)
+        # x = F.relu(self.t_conv0(x))
         # x = self.upsampling(x)
-        # x = F.relu(self.t_conv6(x))
+        # x = F.relu(self.t_conv1(x))
         # x = self.upsampling(x)
-        x = F.relu(self.t_conv0(x))
-        x = self.upsampling(x)
-        x = F.relu(self.t_conv1(x))
-        x = self.upsampling(x)
-        x = F.relu(self.t_conv2(x))
-        x = self.upsampling(x)
-        x = F.relu(self.t_conv3(x))
-        x = self.upsampling(x)
-        x = F.relu(self.t_conv4(x))
-        x = self.upsampling(x)
-        x = torch.sigmoid(self.t_conv5(x))
+        # x = F.relu(self.t_conv2(x))
+        # x = self.upsampling(x)
+        # x = F.relu(self.t_conv3(x))
+        # x = self.upsampling(x)
+        # x = F.relu(self.t_conv4(x))
+        # x = self.upsampling(x)
+        # x = torch.sigmoid(self.t_conv5(x))
                 
         return x
 
@@ -491,7 +516,7 @@ class DenseNet_CAE_PCA(nn.Module):
 
         x = self.densenet121(x)
         # x = x[:,:, None, None]
-        x = self.decoder(x)
+        # x = self.decoder(x) # restore this line
 
         # maxval = torch.max(x[0,0,:,:])
         # minval = torch.min(x[0,0,:,:])

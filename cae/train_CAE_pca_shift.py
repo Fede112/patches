@@ -1,3 +1,5 @@
+import numpy as np
+import random 
 
 import torch
 import torch.optim as optim
@@ -14,8 +16,11 @@ from torch.utils.data.sampler import SubsetRandomSampler
 
 from models import Average_CAE_deep_PCA
 
-
 from train import *
+
+import mm_patch.data
+from mm_patch.crop import *
+import mm_patch.extract_bis as extract
 
 # Dataloader parameters
 batch_size = 64
@@ -23,6 +28,7 @@ validation_split = .2
 shuffle_dataset = True
 random_seed= 42
 # random_seed= 13
+shift_r = 50
 
 # Training parameters
 num_epochs = 150
@@ -31,8 +37,9 @@ lr = 0.002
 # number of checkpoints
 checkpoint_freq = 1
 
+
 # Transfer Learning
-pretrained_weights = True
+pretrained_weights = False
 freeze_pretrained_weights = False
 # unfreeze_epoch = num_epochs // 2
 unfreeze_epoch = 10
@@ -55,8 +62,8 @@ input_images_path = '/scratch/fbarone/test_256/'
 output_images_path = './output/images'
 activations_path = './output/activations'
 save_checkpoint_path = './output/cae_models'
-# load_checkpoint_file = './output/cae_models/20191018-210808_Average_CAE_deep_PCA-1024.pt'
-load_checkpoint_file = './output/cae_models/20191009-232545_Average_CAE_deep-256x8x8.pt' # general weights
+load_checkpoint_file = './output/cae_models/20191018-210808_Average_CAE_deep_PCA-1024.pt'
+# load_checkpoint_file = './output/cae_models/20191009-232545_Average_CAE_deep-256x8x8.pt' # general weights
 pca_filepath = 'output/activations/pca-1024_coding_Average_CAE_deep-256x8x8.pkl' # load pca weights
 
 
@@ -73,9 +80,29 @@ composed = transforms.Compose([
 #                                 transforms.Normalize(mean=[18820.3496], std=[8547.6963])
                             ])
 
-# Dataset
-# patches = datasets.ImageFolder('/scratch/fbarone/test_256/', transform = composed, target_transform=None, loader=read_image_png)
-patches = datasets.ImageFolder(input_images_path, transform = composed, target_transform=None, loader=read_image_png)
+
+
+
+# define crop object
+trans_ls = [crop_img_from_largest_connected, crop_horizontal, crop_vertical]
+crop_seq = Crop(trans_ls)
+
+# mm_patch.data.Patches: build patches and save them as .png 
+try:
+    mm_patch.data.Patches('/scratch/fbarone/images_full_patches_CRO_23072019/dense', '/scratch/fbarone/patches_images_400/dense', crop_seq, patch_shape = 300, stride = 50, max_patches = 100)
+    mm_patch.data.Patches('/scratch/fbarone/images_full_patches_CRO_23072019/venous', '/scratch/fbarone/patches_images_400/venous', crop_seq, patch_shape = 300, stride = 50, max_patches = 100)
+except IOError as e:
+    print(str(e))
+
+
+def _read_image_png(file_name):
+    image = np.array(imageio.imread(file_name)).astype(np.int32)
+    return image
+
+random.seed(9)
+patches = mm_patch.data.DatasetShift('/scratch/fbarone/patches_images_400', transform = composed, target_transform = composed, 
+									patch_shape = 256, shift = shift_r, loader = _read_image_png, extensions = 'png')
+
 
 
 # Creating data indices for training and validation splits:
@@ -113,7 +140,6 @@ assert torch.has_cudnn == True, 'No cudnn library!'
 
 # set device
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-print(torch.cuda.is_available())
 print(f'device set to: {device}')
 
 # initialize the NN model
@@ -158,12 +184,12 @@ criterion = nn.MSELoss()
 # criterion = nn.BCELoss()
 
 # optimizer algorithm
-# optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum = 0.9)
-optimizer = torch.optim.Adam(model.parameters(), lr=lr)
+optimizer = torch.optim.SGD(model.parameters(), lr=lr, momentum = 0.9)
+# optimizer = torch.optim.Adam(model.parameters(), lr=lr)
 # optimizer = torch.optim.RMSprop(model.parameters())
 
 # factor = decaying factor
-scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=10, verbose=True)
+scheduler = ReduceLROnPlateau(optimizer, mode='min', factor=0.5, patience=20, verbose=True)
 
 # training and validation loss recorder
 loss_hist = []
@@ -210,7 +236,7 @@ summary(model, input_size=(1, 256, 256), device = 'cuda')
 for it, epoch in enumerate(range(num_epochs)):
 
     # Unfreeze pretrained weights
-    if epoch == unfreeze_epoch:
+    if epoch == unfreeze_epoch  and freeze_pretrained_weights:
         print("Unfreezing the following parameters:")
         for name, param in model.named_parameters():
             if name in pretrained_pca.keys() and param.requires_grad == False:
@@ -221,12 +247,12 @@ for it, epoch in enumerate(range(num_epochs)):
 
         
     # train for one epoch, printing every 10 iterations
-    train_loss = train_one_epoch(model, optimizer, criterion, train_loader, \
+    train_loss = train_one_epoch_shift(model, optimizer, criterion, train_loader, \
                     device, epoch, print_freq = 2)
 
 
     # evaluate on the test dataset
-    valid_loss = valid(model, criterion, valid_loader, device, epoch)
+    valid_loss = valid_shift(model, criterion, valid_loader, device, epoch)
     
     # keep track of train and valid loss history
     loss_hist.append((train_loss.val, valid_loss.val))
@@ -248,7 +274,7 @@ print("================================================================")
 
 # Plot results
 # obtain one batch of test images
-num_patches = 10
+num_patches = 5
 dataiter = iter(valid_loader)
 images, labels = dataiter.next()
 images = images[:num_patches]
@@ -268,7 +294,7 @@ output = output.view(num_patches, 1, 256, 256)
 output = output.detach().cpu().numpy()
 
 # plot the first ten input images and then reconstructed images
-fig, axes = plt.subplots(nrows=2, ncols=10, sharex=True, sharey=True, figsize=(25,4))
+fig, axes = plt.subplots(nrows=2, ncols=5, sharex=True, sharey=True, figsize=(25,10))
 
 # input images on top row, reconstructions on bottom
 for images, row in zip([images, output], axes):
@@ -291,12 +317,6 @@ ax.legend()
 
 
 # output figures
-# output pkl
-
-history = np.column_stack((np.arange(len(loss_hist)),train_loss,valid_loss))
-
-file_hist_path = os.path.join( output_images_path ,checkpoint['name'][:-3] + '_hist.pkl')
-np.save(file_hist_path, history)
 
 fig_path = os.path.join( output_images_path, checkpoint['name'][:-3] + '.png' )
 fig_hist_path = os.path.join( output_images_path ,checkpoint['name'][:-3] + '_hist.png')

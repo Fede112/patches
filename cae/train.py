@@ -124,6 +124,48 @@ def train_one_epoch_DCAE(model, optimizer, criterion, train_loader, device, epoc
     return losses
 
 
+
+def train_one_epoch_shift(model, optimizer, criterion, train_loader, device, epoch, print_freq = 2):
+    # Ensure dropout layers are in train mode
+    model.train()
+
+    losses = ExpoAverageMeter(alpha = 0.5)  # loss (per word decoded)
+    # batch_time = ExpoAverageMeter()  # forward prop. + back prop. time
+
+    # start = time.time()
+
+
+    # batch forward pass
+    for i_batch, data in tqdm(enumerate(train_loader)):
+        # _ should be the target, which for cae its the image itself        
+        images, target = data[0].to(device), data[1].to(device)
+        # clear the gradients of all optimized variables
+        optimizer.zero_grad()
+        # forward pass: compute predicted outputs by passing inputs to the model
+        outputs = model(images)
+        # calculate the loss
+        loss = criterion(outputs, target)
+        # backward pass: compute gradient of the loss with respect to model parameters
+        loss.backward()
+        # perform a single optimization step (parameter update)
+        optimizer.step()
+
+        # keep track of metrics
+        losses.update(loss.item()) # update running training loss
+        # batch_time.update(time.time() - start) # update time per batch
+
+            
+        # Print status
+        if (i_batch + 1) % (len(train_loader) // print_freq) == 0:
+            print(f'Epoch: [{epoch}] [{i_batch + 1}/ {len(train_loader)}] \t  \
+                    Train Loss: {losses.val:.4f} ({losses.avg:.4f})')
+
+
+    # loss of last mini_batch
+    return losses
+
+
+
 def valid(model, criterion, val_loader, device, epoch):
     # Ensure dropout layers are in validation mode (no dropout or batchnorm)
     model.eval()
@@ -172,6 +214,30 @@ def valid_DCAE(model, criterion, val_loader, device, epoch):
     return losses
 
 
+def valid_shift(model, criterion, val_loader, device, epoch):
+    # Ensure dropout layers are in validation mode (no dropout or batchnorm)
+    model.eval()
+
+    losses = ExpoAverageMeter(alpha = 0.5)
+
+    with torch.no_grad():
+        for data in val_loader:
+            images, target = data[0].to(device), data[1].to(device)
+            outputs = model(images)
+            loss = criterion(outputs, target)
+
+            # keep track of metrics
+            losses.update(loss.item()) # update running training loss
+
+        # Print status
+        print(f'Epoch: [{epoch}] \t\t Valid Loss: {losses.val:.4f} ({losses.avg:.4f})')
+
+
+    return losses
+
+
+
+
 def save_checkpoint(epoch, model, optimizer, scheduler, criterion, loss_hist, save_path, is_best = False):
     """
     Saves the training state.
@@ -179,7 +245,7 @@ def save_checkpoint(epoch, model, optimizer, scheduler, criterion, loss_hist, sa
 
     timestr = time.strftime("%Y%m%d-%H%M%S")
 
-    filename = timestr + '_' + model.__class__.__name__ + '-' + '256x8x8' +'.pt'
+    filename = timestr + '_' + model.__class__.__name__ + '_' + 'shift' +'.pt'
     filepath = os.path.join(save_path, filename)
 
     checkpoint = {}

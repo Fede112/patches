@@ -276,9 +276,126 @@ def extract_patches_2d(image, patch_size, max_patches=None, stride = 1, patch_fi
     # remove the color dimension if useless
     if patches.shape[-1] == 1:
         # astype(np.int32) is a requirement to be compatible with pytorch
+        return zip(i_s, j_s), patches.reshape((n_patches, p_h, p_w)).astype(np.int32)
+    else:
+        return zip(i_s, j_s), patches.astype(np.int32)
+
+
+def extract_shifted(image, patch_size, max_patches=None, stride = 1, patch_filter=None, random_state=None ):
+    """Reshape a 2D image into a collection of patches
+    The resulting patches are allocated in a dedicated array.
+    Read more in the :ref:`User Guide <image_feature_extraction>`.
+    Parameters
+    ----------
+    image : array, shape = (image_height, image_width) or
+        (image_height, image_width, n_channels)
+        The original image data. For color images, the last dimension specifies
+        the channel: a RGB image would have `n_channels=3`.
+    patch_size : tuple of ints (patch_height, patch_width)
+        the dimensions of one patch
+    max_patches : integer or float, optional default is None
+        The maximum number of patches to extract. If max_patches is a float
+        between 0 and 1, it is taken to be a proportion of the total number
+        of patches.
+    random_state : int, RandomState instance or None, optional (default=None)
+        Pseudo number generator state used for random sampling to use if
+        `max_patches` is not None.  If int, random_state is the seed used by
+        the random number generator; If RandomState instance, random_state is
+        the random number generator; If None, the random number generator is
+        the RandomState instance used by `np.random`.
+    Returns
+    -------
+    patches : array, shape = (n_patches, patch_height, patch_width) or
+         (n_patches, patch_height, patch_width, n_channels)
+         The collection of patches extracted from the image, where `n_patches`
+         is either `max_patches` or the total number of patches that can be
+         extracted.
+    Examples
+    --------
+    >>> from sklearn.feature_extraction import image
+    >>> one_image = np.arange(16).reshape((4, 4))
+    >>> one_image
+    array([[ 0,  1,  2,  3],
+           [ 4,  5,  6,  7],
+           [ 8,  9, 10, 11],
+           [12, 13, 14, 15]])
+    >>> patches = image.extract_patches_2d(one_image, (2, 2))
+    >>> print(patches.shape)
+    (9, 2, 2)
+    >>> patches[0]
+    array([[0, 1],
+           [4, 5]])
+    >>> patches[1]
+    array([[1, 2],
+           [5, 6]])
+    >>> patches[8]
+    array([[10, 11],
+           [14, 15]])
+    """
+
+    i_h, i_w = image.shape[:2]
+    p_h, p_w = patch_size
+
+    if p_h > i_h:
+        raise ValueError("Height of the patch should be less than the height"
+                         " of the image.")
+
+    if p_w > i_w:
+        raise ValueError("Width of the patch should be less than the width"
+                         " of the image.")
+
+    # check_array is a function implemented in scikit learn
+    # image = check_array(image, allow_nd=True)
+    image = image.reshape((i_h, i_w, -1))
+    n_colors = image.shape[-1]
+    # print(image.shape)
+
+    extracted_patches, global_indices_shape = extract_patches(image,
+                                        patch_shape = (p_h, p_w, n_colors),
+                                        extraction_step = stride)
+
+    
+    avail_patches = global_indices_shape[0]*global_indices_shape[1]
+    n_patches = min(avail_patches, max_patches)
+    # _compute_n_patches(i_h, i_w, p_h, p_w, max_patches)
+    
+    rng = check_random_state(random_state)
+    mat_idx_arr = rng.choice(avail_patches, size=avail_patches, replace=False)
+    
+
+    i_s = []
+    j_s = []
+    if patch_filter:
+        ok_patches = 0
+        for idx in mat_idx_arr:
+            i_global = idx // global_indices_shape[1]
+            j_global = idx % global_indices_shape[1]
+            if patch_filter(extracted_patches[i_global, j_global], lower_frac = 0.002 , upper_frac = 0.5):
+                i_s.append(i_global)
+                j_s.append(j_global)
+                ok_patches += 1
+                if ok_patches == n_patches:
+                    break
+        else:
+            n_patches = ok_patches            
+    else:
+        for idx in mat_idx_arr[:n_patches]:
+            i_global = idx // global_indices_shape[1]
+            j_global = idx % global_indices_shape[1]
+            i_s.append(i_global)
+            j_s.append(j_global)
+    
+    patches = extracted_patches[i_s, j_s, 0]
+
+    # this reshape forces a copy of the patches.
+    patches = patches.reshape(-1, p_h, p_w, n_colors)
+    # remove the color dimension if useless
+    if patches.shape[-1] == 1:
+        # astype(np.int32) is a requirement to be compatible with pytorch
         return patches.reshape((n_patches, p_h, p_w)).astype(np.int32)
     else:
         return patches.astype(np.int32)
+
 
 if __name__ == '__main__':
 
