@@ -4,7 +4,7 @@ sys.path.insert(0,'/u/f/fbarone/Documents/patches/')
 import torch
 from torchvision import transforms
 from tqdm import tqdm
-
+# import seaborn
 
 
 from models import ModifiedDenseNet121
@@ -52,10 +52,11 @@ densenet_norm = transforms.Normalize(mean=[0.485, 0.485, 0.485], std=[0.229, 0.2
 # CONFIGURATION
 
 # Images list
-images_ls = ['80907_L_CC', '97800_L_CC', '116588_L_CC', '117186_L_CC', '118343_L_CC', '121445_L_CC', '122118_L_CC', '122141_L_CC', '122876_L_CC', '132796_L_CC' ]
+# images_ls = ['80907_L_CC', '97800_L_CC', '116588_L_CC', '117186_L_CC', '118343_L_CC', '121445_L_CC', '122118_L_CC', '122141_L_CC', '122876_L_CC', '132796_L_CC' ]
+images_ls = ['105883_L_CC', '80907_L_CC', '116588_L_CC', '117186_L_CC', '118343_L_CC', '121445_L_CC', '122118_L_CC', '122141_L_CC', '122876_L_CC', '132796_L_CC' ]
 # images_ls = ['80907_L_CC', '97800_L_CC']
 # Patches per image
-patches_per_image = 40
+patches_per_image = 4
 
 # Transfer Learning
 pretrained_weights = True
@@ -193,9 +194,11 @@ for img_str in tqdm(images_ls):
         # patch = torch.tensor(trans_img[block_i*px:block_i*px + px , block_j*py:block_j*py + py])
         # print(patch.shape)
         # patch = torch.tensor(patch)
+
         patch = scale_img(patch)
         patch = torch.from_numpy(patch.astype('float32'))
         patch = patch.unsqueeze(0).unsqueeze(0)
+
 
         # print(patch.shape)
         output_256x8x8 = model_256x8x8(patch.float().to(device=device))
@@ -230,81 +233,252 @@ for img_str in tqdm(images_ls):
         output_1024_ls.append(output_1024)
         output_100_ls.append(output_100)
 
-# Figure 1024 against Densenet
+# # Figure 1024 against Densenet
 
-# Major ticks every 20, minor ticks every 5
-major_ticks = np.arange(0, len(images_ls)*patches_per_image, patches_per_image)
-# minor_ticks = np.arange(0, 401, 5)
+# # Major ticks every 20, minor ticks every 5
+# major_ticks = np.arange(0, len(images_ls)*patches_per_image, patches_per_image)
+# # minor_ticks = np.arange(0, 401, 5)
 
-fig = plt.figure()
-ax = fig.add_subplot(1, 2, 1)
+# fig = plt.figure()
+# ax = fig.add_subplot(1, 2, 1)
 
-ax.set_xticks(major_ticks)
-# ax.set_xticks(minor_ticks, minor=True)
-ax.set_yticks(major_ticks)
-# ax.set_yticks(minor_ticks, minor=True)
+# ax.set_xticks(major_ticks)
+# # ax.set_xticks(minor_ticks, minor=True)
+# ax.set_yticks(major_ticks)
+# # ax.set_yticks(minor_ticks, minor=True)
 
-# And a corresponding grid
-ax.grid(which='both')
+# # And a corresponding grid
+# ax.grid(which='both')
 
-# Or if you want different settings for the grids:
-ax.grid(which='major', alpha=1, c = 'black')
-# ax.grid(which='minor', alpha=0.2)
+# # Or if you want different settings for the grids:
+# ax.grid(which='major', alpha=1, c = 'black')
+# # ax.grid(which='minor', alpha=0.2)
 
         
-# print(len(output_1024_ls))
-distance_matrix = np.zeros( (len(output_1024_ls),len(output_1024_ls)) )
-for i in range(len(output_1024_ls)):
-    for j in range(i,len(output_1024_ls)):
-        dist = distance.euclidean(output_1024_ls[i], output_1024_ls[j])
-        print(f'CAE_1024: {dist}')
-        distance_matrix[i,j] = dist
-        distance_matrix[j,i] = distance_matrix[i,j]
+# # print(len(output_1024_ls))
+# distance_matrix = np.zeros( (len(output_1024_ls),len(output_1024_ls)) )
+# for i in range(len(output_1024_ls)):
+#     for j in range(i,len(output_1024_ls)):
+#         dist = distance.euclidean(output_1024_ls[i], output_1024_ls[j])
+#         print(f'CAE_1024: {dist}')
+#         distance_matrix[i,j] = dist
+#         distance_matrix[j,i] = distance_matrix[i,j]
 
-ax.imshow(distance_matrix)
-ax.set_title('CAE-PCA-1024 features')
-ax.grid(True)
-
-
+# ax.imshow(distance_matrix)
+# ax.set_title('CAE-PCA-1024 features')
+# ax.grid(True)
 
 
 
 
+
+
+
+# pca_trans_path = '/u/f/fbarone/Documents/patches_analysis/73000/densenet_pca_0.95_eigenvectors_256x256.txt'
+
+# pca_trans = np.loadtxt(pca_trans_path)
+
+# print(pca_trans.shape)
+
+# ax_d = fig.add_subplot(1, 2, 2)
+
+# ax_d.set_xticks(major_ticks)
+# # ax_d.set_xticks(minor_ticks, minor=True)
+# ax_d.set_yticks(major_ticks)
+# # ax_d.set_yticks(minor_ticks, minor=True)
+
+# # And a corresponding grid
+# ax_d.grid(which='both')
+
+# # Or if you want different settings for the grids:
+# ax_d.grid(which='major', alpha=1, c = 'black')
+# # ax_d.grid(which='minor', alpha=0.2)
+
+
+
+# distance_matrix = np.zeros( (len(output_densenet_ls),len(output_densenet_ls)) )
+# for i in range(len(output_densenet_ls)):
+#     for j in range(i,len(output_densenet_ls)):
+#         # print(np.dot(pca_trans,output_densenet_ls[i]).shape)
+
+#         dist = distance.euclidean(  np.dot(pca_trans,output_densenet_ls[i]), np.dot(pca_trans,output_densenet_ls[j])   )
+#         print(dist)
+#         distance_matrix[i,j] = dist
+#         distance_matrix[j,i] = distance_matrix[i,j]
+
+# ax_d.imshow(distance_matrix)
+# ax_d.set_title('Densenet features')
+# ax_d.grid(True)
+
+# plt.show()
+
+
+
+
+
+###########################################################################
+###########################################################################
+## Distance histogram
 
 pca_trans_path = '/u/f/fbarone/Documents/patches_analysis/73000/densenet_pca_0.95_eigenvectors_256x256.txt'
-
 pca_trans = np.loadtxt(pca_trans_path)
 
-print(pca_trans.shape)
-
-ax_d = fig.add_subplot(1, 2, 2)
-
-ax_d.set_xticks(major_ticks)
-# ax_d.set_xticks(minor_ticks, minor=True)
-ax_d.set_yticks(major_ticks)
-# ax_d.set_yticks(minor_ticks, minor=True)
-
-# And a corresponding grid
-ax_d.grid(which='both')
-
-# Or if you want different settings for the grids:
-ax_d.grid(which='major', alpha=1, c = 'black')
-# ax_d.grid(which='minor', alpha=0.2)
+output_densenet_ls = []
+output_1024_ls = []
 
 
+# images_ls = ['132796_L_CC', '156260_L_CC']
+images_ls = ['132796_L_CC', '156260_L_CC', '262949_L_CC', '176200_L_CC']
+# images_ls = ['132796_L_CC', '156260_L_CC', '262949_L_CC', '176200_L_CC', '174530_L_CC', '267248_L_CC']
+for img_str in tqdm(images_ls): 
+    
+    img = imageio.imread('/scratch/fbarone/dicom_CRO_23072019/sample_data/images/'+img_str+'.png')
+    crop_trans = Crop(trans_ls)
+    trans_img = crop_trans(img)
+    indexes, patches = extr.extract_patches_2d(trans_img, (256,256), max_patches=80, stride=5, 
+                                                patch_filter=extr.patch_filter, random_state=13)
 
-distance_matrix = np.zeros( (len(output_densenet_ls),len(output_densenet_ls)) )
+
+    for patch in patches:
+        patch = scale_img(patch)
+        patch = torch.from_numpy(patch.astype('float32'))
+        patch = patch.unsqueeze(0).unsqueeze(0)
+
+
+        # print(output_256x8x8.shape)
+        output_1024 = model_1024(patch.float().to(device=device))
+        output_1024 = output_1024.unsqueeze(0).flatten()
+        output_1024 = output_1024.detach().cpu().numpy()
+        
+        output_1024_ls.append(output_1024)
+
+
+        patch = patch[0,:,:,:]
+        patch = patch.repeat(3, 1, 1)
+        patch = densenet_norm(patch)
+        patch.unsqueeze_(0)
+        # print(patch.shape)
+
+        output_densenet = model_densenet(patch.float().to(device=device))
+        output_densenet = output_densenet.unsqueeze(0).flatten()
+        # print(output_densenet.shape)
+        output_densenet = output_densenet.detach().cpu().numpy()
+        
+        output_densenet_ls.append(output_densenet)
+
+print(f'densenet overlapping: {len(output_densenet_ls)}')
+dist_overlap_1024_ls = []
+dist_overlap_densenet_ls = []
 for i in range(len(output_densenet_ls)):
-    for j in range(i,len(output_densenet_ls)):
+    for j in range(i+1,len(output_densenet_ls)):
         # print(np.dot(pca_trans,output_densenet_ls[i]).shape)
 
-        dist = distance.euclidean(  np.dot(pca_trans,output_densenet_ls[i]), np.dot(pca_trans,output_densenet_ls[j])   )
-        print(dist)
-        distance_matrix[i,j] = dist
-        distance_matrix[j,i] = distance_matrix[i,j]
+        dist_1024 = distance.euclidean( output_1024_ls[i], output_1024_ls[j]    )
+        dist_overlap_1024_ls.append(dist_1024)
+        
+        dist_densenet = distance.euclidean(  np.dot(pca_trans,output_densenet_ls[i]), np.dot(pca_trans,output_densenet_ls[j])   )
+        dist_overlap_densenet_ls.append(dist_densenet)
 
-ax_d.imshow(distance_matrix)
-ax_d.set_title('Densenet features')
-ax_d.grid(True)
+
+# plt.hist(dist_ls_overlap, bins = 20)
+# plt.show()
+
+
+
+
+
+
+
+
+
+# img_str = '/u/f/fbarone/Documents/105883_L_CC.png'
+
+pca_trans_path = '/u/f/fbarone/Documents/patches_analysis/73000/densenet_pca_0.95_eigenvectors_256x256.txt'
+pca_trans = np.loadtxt(pca_trans_path)
+
+
+output_densenet_ls = []
+output_1024_ls = []
+
+
+# images_ls = ['132796_L_CC', '120712_L_CC', '122810_L_CC', '123651_L_CC']
+# images_ls = ['132796_L_CC', '120712_L_CC', '122810_L_CC', '123651_L_CC', '187461_L_CC', '266061_L_CC', '268191_L_CC', '269932_L_CC']
+images_ls = ['132796_L_CC', '120712_L_CC', '122810_L_CC', '123651_L_CC', '187461_L_CC', '266061_L_CC', '268191_L_CC', '269932_L_CC', '270683_L_CC', '271106_L_CC', '272673_L_CC', '273181_L_CC', '273772_L_CC', '275990_L_CC']
+for img_str in tqdm(images_ls): 
+    
+    img = imageio.imread('/scratch/fbarone/dicom_CRO_23072019/sample_data/images/'+img_str+'.png')
+    crop_trans = Crop(trans_ls)
+    trans_img = crop_trans(img)
+    indexes, patches = extr.extract_patches_2d(trans_img, (256,256), max_patches=30, stride=256, 
+                                                patch_filter=extr.patch_filter, random_state=13)
+
+
+    for patch in patches:
+        patch = scale_img(patch)
+        patch = torch.from_numpy(patch.astype('float32'))
+        patch = patch.unsqueeze(0).unsqueeze(0)
+
+
+        # print(output_256x8x8.shape)
+        output_1024 = model_1024(patch.float().to(device=device))
+        output_1024 = output_1024.unsqueeze(0).flatten()
+        output_1024 = output_1024.detach().cpu().numpy()
+        
+        output_1024_ls.append(output_1024)
+
+
+        patch = patch[0,:,:,:]
+        patch = patch.repeat(3, 1, 1)
+        patch = densenet_norm(patch)
+        patch.unsqueeze_(0)
+        # print(patch.shape)
+
+        output_densenet = model_densenet(patch.float().to(device=device))
+        output_densenet = output_densenet.unsqueeze(0).flatten()
+        # print(output_densenet.shape)
+        output_densenet = output_densenet.detach().cpu().numpy()
+        
+        output_densenet_ls.append(output_densenet)
+
+print(f'densenet non overlapping: {len(output_densenet_ls)}')
+dist_nonoverlap_1024_ls = []
+dist_nonoverlap_densenet_ls = []
+for i in range(len(output_densenet_ls)):
+    for j in range(i+1,len(output_densenet_ls)):
+        # print(np.dot(pca_trans,output_densenet_ls[i]).shape)
+
+        dist_1024 = distance.euclidean(  output_1024_ls[i], output_1024_ls[j]    )
+        dist_nonoverlap_1024_ls.append(dist_1024)
+        
+        dist_densenet = distance.euclidean(  np.dot(pca_trans,output_densenet_ls[i]), np.dot(pca_trans,output_densenet_ls[j])   )
+        dist_nonoverlap_densenet_ls.append(dist_densenet)
+
+# plt.hist(dist_ls_nonoverlap, bins = 20)
+# plt.show()
+
+# Plots
+
+# kwargs = dict(histtype='stepfilled', alpha=0.3, normed=True, bins=20)
+# plt.hist(dist_ls_overlap, color = 'blue', label='Overlapping', **kwargs)
+# plt.hist(dist_ls_nonoverlap, color = 'red', label='Non overlapping', **kwargs);
+# plt.legend()
+# plt.xlabel('Distance between images (DenseNet\'s compressed representation)')
+# plt.show()
+
+fig_1 = plt.figure(figsize = (10,8))
+ax1 = fig_1.add_subplot(1,2,1)
+
+kwargs = dict(histtype='stepfilled', alpha=0.3, normed=True, bins=20)
+ax1.hist(dist_overlap_1024_ls, color = 'blue', label='Overlapping patches - CAE+PCA 1024', **kwargs)
+ax1.hist(dist_nonoverlap_1024_ls, color = 'red', label='Non overlapping patches - CAE+PCA 1024', **kwargs);
+ax1.set_xlabel('Distance between images compressed representation')
+ax1.legend()
+
+ax2 = fig_1.add_subplot(1,2,2)
+kwargs = dict(histtype='stepfilled', alpha=0.3, normed=True, bins=20)
+ax2.hist(dist_overlap_densenet_ls, color = 'blue', label='Overlapping patches - Densenet', **kwargs)
+ax2.hist(dist_nonoverlap_densenet_ls, color = 'red', label='Non overlapping patches - Densenet', **kwargs);
+ax2.set_xlabel('Distance between images compressed representation')
+ax2.legend()
 
 plt.show()
